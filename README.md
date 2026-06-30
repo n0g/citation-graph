@@ -34,9 +34,14 @@ and never sent anywhere else.
 
 ## Notes
 
+- Semantic Scholar requests are routed through a self-hosted `cors-anywhere`
+  proxy (`annie-easley.n0g.at`) so that rate-limit/error responses keep their
+  CORS headers — without it, the browser can't tell a 429 apart from a
+  generic network failure, since Semantic Scholar omits CORS headers on
+  non-2xx responses.
 - Semantic Scholar's unauthenticated tier shares a low rate limit across all
-  anonymous users; the app backs off and retries automatically, but on a
-  congested IP some papers may still fail to resolve (shown in the status
-  line). A free API key raises the limit significantly if needed.
+  anonymous users; the app backs off and retries automatically on 429/5xx,
+  but on a congested IP some papers may still fail to resolve (shown in the
+  status line). A free API key raises the limit significantly if needed.
 - References/citations are capped at 50 each per seed paper to keep the
   graph readable.

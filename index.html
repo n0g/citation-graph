@@ -146,7 +146,11 @@
 (function () {
   'use strict';
 
-  const S2_BASE = 'https://api.semanticscholar.org/graph/v1';
+  // Routed through a self-hosted cors-anywhere instance: the Semantic Scholar
+  // API omits CORS headers on non-2xx responses (see fetchJson's 429 handling),
+  // which the proxy fixes by always attaching them, even on error responses.
+  const CORS_PROXY = 'https://annie-easley.n0g.at/cors-anywhere/';
+  const S2_BASE = CORS_PROXY + 'https://api.semanticscholar.org/graph/v1';
   const ZOTERO_BASE = 'https://api.zotero.org';
   const ZOTERO_BATCH_SIZE = 50;
   const MIN_DELAY_MS = 150;
@@ -279,8 +283,8 @@
       await sleep(dynamicDelay);
       return fetchJson(url, retry + 1);
     }
-    if (res.status === 429) {
-      if (retry >= MAX_RETRIES) throw new Error('Rate limited repeatedly: ' + url);
+    if (res.status === 429 || res.status >= 500) {
+      if (retry >= MAX_RETRIES) throw new Error('HTTP ' + res.status + ' repeatedly (rate-limited or upstream/proxy error): ' + url);
       backOff();
       await sleep(dynamicDelay);
       return fetchJson(url, retry + 1);

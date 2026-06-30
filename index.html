@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Citation Graph Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  :root {
+    --seed: #2563eb;
+    --reference: #16a34a;
+    --citation: #ea580c;
+    --border: #e2e8f0;
+    --text-muted: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #0f172a;
+    background: #f8fafc;
+  }
+  header {
+    padding: 1.5rem 2rem 0.5rem;
+  }
+  header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+  .subtitle { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
+  #upload-section { padding: 1rem 2rem; }
+  #dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #dropzone.drag-over { border-color: var(--seed); background: #eff6ff; }
+  .file-link { color: var(--seed); text-decoration: underline; cursor: pointer; }
+  #status { margin-top: 0.75rem; font-size: 0.9rem; color: var(--text-muted); min-height: 1.2em; }
+  #progress-bar-wrap {
+    margin-top: 0.5rem; height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden;
+  }
+  #progress-bar { height: 100%; width: 0%; background: var(--seed); transition: width 0.2s; }
+  #controls {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
+    padding: 0 2rem 1rem; font-size: 0.9rem;
+  }
+  #controls label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+  button {
+    font: inherit; padding: 0.4rem 0.9rem; border-radius: 6px;
+    border: 1px solid var(--border); background: #fff; cursor: pointer;
+  }
+  button:hover { background: #f1f5f9; }
+  #legend { display: flex; gap: 1rem; margin-left: auto; }
+  #legend span { display: flex; align-items: center; gap: 0.35rem; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  #graph-section { position: relative; padding: 0 2rem 2rem; }
+  #graph { width: 100%; height: 65vh; min-height: 420px; display: block; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+  #tooltip {
+    position: absolute; max-width: 260px; background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+  }
+  #tooltip h3 { margin: 0 0 0.35rem; font-size: 0.95rem; line-height: 1.3; padding-right: 1rem; }
+  #tooltip p { margin: 0.2rem 0; color: var(--text-muted); }
+  #tooltip a { color: var(--seed); }
+  #tooltip-close {
+    position: absolute; top: 0.3rem; right: 0.4rem; border: none; background: none;
+    cursor: pointer; font-size: 1rem; line-height: 1; padding: 0.2rem;
+  }
+  .hidden { display: none !important; }
+  .error { color: #dc2626; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Citation Graph Explorer</h1>
+  <p class="subtitle">Upload a BibTeX file to explore its citation network via the Semantic Scholar API.</p>
+</header>
+
+<section id="upload-section">
+  <div id="dropzone">
+    <p>Drag &amp; drop a .bib file here, or <label for="file-input" class="file-link">browse</label></p>
+    <input type="file" id="file-input" accept=".bib,.bibtex,text/plain" hidden>
+  </div>
+  <div id="status"></div>
+  <div id="progress-bar-wrap" class="hidden"><div id="progress-bar"></div></div>
+</section>
+
+<section id="controls" class="hidden">
+  <label><input type="checkbox" id="toggle-refs" checked> Show references</label>
+  <label><input type="checkbox" id="toggle-cites" checked> Show citations</label>
+  <button id="export-btn">Export BibTeX</button>
+  <button id="reset-btn">Load another file</button>
+  <div id="legend">
+    <span><i class="dot" style="background:#2563eb"></i> Seed</span>
+    <span><i class="dot" style="background:#16a34a"></i> Reference</span>
+    <span><i class="dot" style="background:#ea580c"></i> Citation</span>
+  </div>
+</section>
+
+<section id="graph-section">
+  <svg id="graph"></svg>
+  <div id="tooltip" class="hidden"></div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  const S2_BASE = 'https://api.semanticscholar.org/graph/v1';
+  const MIN_DELAY_MS = 150;
+  const MAX_REFS_PER_PAPER = 50;
+  const MAX_CITATIONS_PER_PAPER = 50;
+  const COLORS = { seed: '#2563eb', reference: '#16a34a', citation: '#ea580c' };
+  const RESOLVE_FIELDS = 'paperId,title,authors,year,citationCount,externalIds';
+  const DETAIL_FIELDS = [
+    'title', 'authors', 'year', 'citationCount', 'externalIds',
+    'references.paperId', 'references.title', 'references.authors',
+    'references.year', 'references.citationCount', 'references.externalIds',
+    'citations.paperId', 'citations.title', 'citations.authors',
+    'citations.year', 'citations.citationCount', 'citations.externalIds'
+  ].join(',');
+
+  // ---------- BibTeX parsing ----------
+
+  function parseBibtex(text) {
+    const entries = [];
+    const entryRegex = /@(\w+)\s*\{/g;
+    let match;
+    while ((match = entryRegex.exec(text)) !== null) {
+      const type = match[1].toLowerCase();
+      if (type === 'comment' || type === 'string' || type === 'preamble') continue;
+      const start = entryRegex.lastIndex;
+      let depth = 1;
+      let i = start;
+      for (; i < text.length && depth > 0; i++) {
+        if (text[i] === '{') depth++;
+        else if (text[i] === '}') depth--;
+      }
+      const body = text.slice(start, i - 1);
+      entries.push(parseEntryBody(type, body));
+      entryRegex.lastIndex = i;
+    }
+    return entries;
+  }
+
+  function parseEntryBody(type, body) {
+    const commaIdx = body.indexOf(',');
+    const key = commaIdx === -1 ? body.trim() : body.slice(0, commaIdx).trim();
+    const fieldsStr = commaIdx === -1 ? '' : body.slice(commaIdx + 1);
+    const fields = {};
+    let i = 0;
+    while (i < fieldsStr.length) {
+      while (i < fieldsStr.length && /[\s,]/.test(fieldsStr[i])) i++;
+      if (i >= fieldsStr.length) break;
+      const nameStart = i;
+      while (i < fieldsStr.length && fieldsStr[i] !== '=') i++;
+      const name = fieldsStr.slice(nameStart, i).trim().toLowerCase();
+      i++; // skip '='
+      while (i < fieldsStr.length && /\s/.test(fieldsStr[i])) i++;
+      let value = '';
+      if (fieldsStr[i] === '{') {
+        let depth = 1; i++;
+        const valStart = i;
+        while (i < fieldsStr.length && depth > 0) {
+          if (fieldsStr[i] === '{') depth++;
+          else if (fieldsStr[i] === '}') depth--;
+          if (depth > 0) i++;
+        }
+        value = fieldsStr.slice(valStart, i);
+        i++;
+      } else if (fieldsStr[i] === '"') {
+        i++;
+        const valStart = i;
+        while (i < fieldsStr.length && fieldsStr[i] !== '"') i++;
+        value = fieldsStr.slice(valStart, i);
+        i++;
+      } else {
+        const valStart = i;
+        while (i < fieldsStr.length && fieldsStr[i] !== ',') i++;
+        value = fieldsStr.slice(valStart, i).trim();
+      }
+      if (name) fields[name] = value;
+    }
+    return { type, key, fields };
+  }
+
+  function cleanText(str) {
+    return (str || '').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function extractDoi(entry) {
+    let doi = entry.fields.doi;
+    if (!doi && entry.fields.url) {
+      const m = entry.fields.url.match(/10\.\d{4,9}\/\S+/);
+      if (m) doi = m[0];
+    }
+    if (!doi) return null;
+    doi = cleanText(doi).replace(/^https?:\/\/(dx\.)?doi\.org\//i, '');
+    return doi || null;
+  }
+
+  function extractTitle(entry) {
+    const title = cleanText(entry.fields.title);
+    return title || null;
+  }
+
+  // ---------- Semantic Scholar API ----------
+
+  let lastRequestTime = 0;
+  let dynamicDelay = MIN_DELAY_MS;
+  const MAX_DELAY_MS = 8000;
+  const MAX_RETRIES = 5;
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+  async function rateLimit() {
+    const wait = lastRequestTime + dynamicDelay - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastRequestTime = Date.now();
+  }
+
+  function backOff() {
+    dynamicDelay = Math.min(dynamicDelay * 2, MAX_DELAY_MS);
+  }
+
+  async function fetchJson(url, retry) {
+    retry = retry || 0;
+    await rateLimit();
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      // The Semantic Scholar API omits CORS headers on 429/5xx responses, so a
+      // browser fetch() can't see the real status — it just throws. Treat any
+      // thrown fetch error as a possible rate limit and back off before retrying.
+      if (retry >= MAX_RETRIES) throw new Error('Request failed repeatedly (likely rate-limited): ' + url);
+      backOff();
+      await sleep(dynamicDelay);
+      return fetchJson(url, retry + 1);
+    }
+    if (res.status === 429) {
+      if (retry >= MAX_RETRIES) throw new Error('Rate limited repeatedly: ' + url);
+      backOff();
+      await sleep(dynamicDelay);
+      return fetchJson(url, retry + 1);
+    }
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
+    dynamicDelay = Math.max(MIN_DELAY_MS, dynamicDelay * 0.85);
+    return res.json();
+  }
+
+  async function resolvePaper(entry) {
+    const doi = extractDoi(entry);
+    const title = extractTitle(entry);
+    if (doi) {
+      try {
+        const data = await fetchJson(S2_BASE + '/paper/DOI:' + encodeURIComponent(doi) + '?fields=' + RESOLVE_FIELDS);
+        if (data && data.paperId) return data;
+      } catch (e) { console.warn(e.message); }
+    }
+    if (title) {
+      try {
+        const data = await fetchJson(S2_BASE + '/paper/search?query=' + encodeURIComponent(title) + '&fields=' + RESOLVE_FIELDS + '&limit=1');
+        if (data && data.data && data.data.length) return data.data[0];
+      } catch (e) { console.warn(e.message); }
+    }
+    return null;
+  }
+
+  async function fetchPaperDetails(paperId) {
+    return fetchJson(S2_BASE + '/paper/' + paperId + '?fields=' + DETAIL_FIELDS);
+  }
+
+  // ---------- Graph building ----------
+
+  function addOrUpdateNode(map, paper, suggestedType) {
+    if (!paper || !paper.paperId) return null;
+    const existing = map.get(paper.paperId);
+    if (existing) {
+      if (suggestedType === 'seed') existing.type = 'seed';
+      return existing;
+    }
+    const node = {
+      id: paper.paperId,
+      title: cleanText(paper.title) || '(untitled)',
+      authors: (paper.authors || []).map((a) => a.name).filter(Boolean).join(', '),
+      year: paper.year || null,
+      citationCount: paper.citationCount || 0,
+      doi: (paper.externalIds && paper.externalIds.DOI) || null,
+      type: suggestedType
+    };
+    map.set(paper.paperId, node);
+    return node;
+  }
+
+  async function buildGraph(entries, progressCb) {
+    const nodes = new Map();
+    const edgeKeys = new Set();
+    const edges = [];
+    const seedIds = [];
+    const failed = [];
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const label = extractTitle(entry) || entry.key;
+      progressCb({ phase: 'resolve', current: i + 1, total: entries.length, label });
+      let resolved = null;
+      try {
+        resolved = await resolvePaper(entry);
+      } catch (e) {
+        console.warn('resolve failed', entry.key, e);
+      }
+      if (resolved && resolved.paperId) {
+        const node = addOrUpdateNode(nodes, resolved, 'seed');
+        seedIds.push(node.id);
+      } else {
+        failed.push(label);
+      }
+    }
+
+    for (let i = 0; i < seedIds.length; i++) {
+      const seedId = seedIds[i];
+      progressCb({ phase: 'expand', current: i + 1, total: seedIds.length, label: nodes.get(seedId).title });
+      let details = null;
+      try {
+        details = await fetchPaperDetails(seedId);
+      } catch (e) {
+        console.warn('details failed', seedId, e);
+        continue;
+      }
+      if (!details) continue;
+
+      const refs = (details.references || []).filter((r) => r && r.paperId).slice(0, MAX_REFS_PER_PAPER);
+      for (const r of refs) {
+        addOrUpdateNode(nodes, r, 'reference');
+        const key = seedId + '>' + r.paperId + '>reference';
+        if (!edgeKeys.has(key)) {
+          edgeKeys.add(key);
+          edges.push({ source: seedId, target: r.paperId, kind: 'reference' });
+        }
+      }
+
+      const cites = (details.citations || []).filter((c) => c && c.paperId).slice(0, MAX_CITATIONS_PER_PAPER);
+      for (const c of cites) {
+        addOrUpdateNode(nodes, c, 'citation');
+        const key = c.paperId + '>' + seedId + '>citation';
+        if (!edgeKeys.has(key)) {
+          edgeKeys.add(key);
+          edges.push({ source: c.paperId, target: seedId, kind: 'citation' });
+        }
+      }
+    }
+
+    return { nodes: Array.from(nodes.values()), edges, failed, seedCount: seedIds.length };
+  }
+
+  // ---------- UI helpers ----------
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const statusEl = document.getElementById('status');
+  const progressWrap = document.getElementById('progress-bar-wrap');
+  const progressBar = document.getElementById('progress-bar');
+  const controls = document.getElementById('controls');
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('error', !!isError);
+  }
+
+  function setProgressVisible(visible) {
+    progressWrap.classList.toggle('hidden', !visible);
+    if (!visible) progressBar.style.width = '0%';
+  }
+
+  function showControls(show) {
+    controls.classList.toggle('hidden', !show);
+  }
+
+  function updateProgress(info) {
+    const phaseOffset = info.phase === 'resolve' ? 0 : 0.5;
+    const pct = Math.round((phaseOffset + (info.current / info.total) * 0.5) * 100);
+    progressBar.style.width = pct + '%';
+    const verb = info.phase === 'resolve' ? 'Resolving' : 'Expanding';
+    setStatus(verb + ' ' + info.current + '/' + info.total + ': ' + info.label);
+  }
+
+  // ---------- D3 rendering ----------
+
+  let svg, zoomLayer, gLink, gNode, simulation;
+  let currentGraph = null;
+  let showRefs = true;
+  let showCites = true;
+
+  function initSvg() {
+    svg = d3.select('#graph');
+    svg.selectAll('*').remove();
+
+    const defs = svg.append('defs');
+    defs.append('marker')
+      .attr('id', 'arrow')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 18)
+      .attr('refY', 0)
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', '#cbd5e1');
+
+    zoomLayer = svg.append('g').attr('class', 'zoom-layer');
+    gLink = zoomLayer.append('g').attr('class', 'links');
+    gNode = zoomLayer.append('g').attr('class', 'nodes');
+
+    svg.call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', (event) => {
+      zoomLayer.attr('transform', event.transform);
+    }));
+  }
+
+  function visibleData(graph) {
+    const nodes = graph.nodes.filter((n) =>
+      n.type === 'seed' ||
+      (n.type === 'reference' && showRefs) ||
+      (n.type === 'citation' && showCites)
+    );
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    const edges = graph.edges.filter((e) =>
+      nodeIds.has(e.source) && nodeIds.has(e.target) &&
+      ((e.kind === 'reference' && showRefs) || (e.kind === 'citation' && showCites))
+    );
+    return { nodes, edges };
+  }
+
+  function drag(sim) {
+    function started(event, d) {
+      if (!event.active) sim.alphaTarget(0.2).restart();
+      d.fx = d.x; d.fy = d.y;
+    }
+    function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+    function ended(event, d) {
+      if (!event.active) sim.alphaTarget(0);
+      d.fx = null; d.fy = null;
+    }
+    return d3.drag().on('start', started).on('drag', dragged).on('end', ended);
+  }
+
+  function drawGraph(nodes, edgesRaw) {
+    if (simulation) simulation.stop();
+    const edges = edgesRaw.map((e) => ({ source: e.source, target: e.target, kind: e.kind }));
+
+    const width = svg.node().clientWidth || 800;
+    const height = svg.node().clientHeight || 600;
+    const maxCite = d3.max(nodes, (n) => n.citationCount) || 1;
+    const radius = d3.scaleSqrt().domain([0, maxCite]).range([6, 26]);
+
+    simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(edges).id((d) => d.id).distance(80).strength(0.3))
+      .force('charge', d3.forceManyBody().strength(-180))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collide', d3.forceCollide().radius((d) => radius(d.citationCount) + 4));
+
+    const link = gLink.selectAll('line').data(edges, (d, i) => i + '-' + d.kind);
+    link.exit().remove();
+    const linkEnter = link.enter().append('line')
+      .attr('stroke', '#cbd5e1')
+      .attr('stroke-width', 1.2)
+      .attr('marker-end', 'url(#arrow)');
+    const linkMerged = linkEnter.merge(link);
+
+    const node = gNode.selectAll('circle').data(nodes, (d) => d.id);
+    node.exit().remove();
+    const nodeEnter = node.enter().append('circle')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1.5)
+      .style('cursor', 'pointer')
+      .call(drag(simulation))
+      .on('click', (event, d) => { event.stopPropagation(); showTooltip(event, d); });
+    const nodeMerged = nodeEnter.merge(node)
+      .attr('r', (d) => radius(d.citationCount))
+      .attr('fill', (d) => COLORS[d.type]);
+
+    simulation.on('tick', () => {
+      linkMerged
+        .attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y)
+        .attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+      nodeMerged.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
+    });
+  }
+
+  function update() {
+    if (!currentGraph) return;
+    const { nodes, edges } = visibleData(currentGraph);
+    drawGraph(nodes, edges);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function showTooltip(event, d) {
+    const tooltip = document.getElementById('tooltip');
+    tooltip.innerHTML =
+      '<button id="tooltip-close" aria-label="Close">&times;</button>' +
+      '<h3>' + escapeHtml(d.title) + '</h3>' +
+      '<p>' + escapeHtml(d.authors || 'Unknown authors') + '</p>' +
+      '<p>' + (d.year || 'Year unknown') + ' &middot; ' + d.citationCount + ' citations</p>' +
+      '<p><a href="https://www.semanticscholar.org/paper/' + encodeURIComponent(d.id) + '" target="_blank" rel="noopener">View on Semantic Scholar &rarr;</a></p>';
+    tooltip.classList.remove('hidden');
+    const rect = document.getElementById('graph-section').getBoundingClientRect();
+    const left = Math.min(event.clientX - rect.left + 12, rect.width - 270);
+    tooltip.style.left = Math.max(left, 0) + 'px';
+    tooltip.style.top = (event.clientY - rect.top + 12) + 'px';
+    document.getElementById('tooltip-close').onclick = (e) => {
+      e.stopPropagation();
+      tooltip.classList.add('hidden');
+    };
+  }
+
+  document.addEventListener('click', (e) => {
+    const tooltip = document.getElementById('tooltip');
+    if (!tooltip.contains(e.target)) tooltip.classList.add('hidden');
+  });
+
+  document.getElementById('toggle-refs').addEventListener('change', (e) => {
+    showRefs = e.target.checked;
+    update();
+  });
+  document.getElementById('toggle-cites').addEventListener('change', (e) => {
+    showCites = e.target.checked;
+    update();
+  });
+
+  window.addEventListener('resize', () => {
+    if (currentGraph && simulation) {
+      const width = svg.node().clientWidth || 800;
+      const height = svg.node().clientHeight || 600;
+      simulation.force('center', d3.forceCenter(width / 2, height / 2));
+      simulation.alpha(0.3).restart();
+    }
+  });
+
+  // ---------- BibTeX export ----------
+
+  function nodeToBibtex(n, usedKeys) {
+    const firstAuthor = (n.authors.split(',')[0] || '').trim().split(' ').pop() || 'unknown';
+    let base = firstAuthor.replace(/[^a-zA-Z]/g, '') || 'paper';
+    base += n.year || 'nd';
+    let key = base;
+    let suffix = 0;
+    while (usedKeys.has(key)) {
+      suffix++;
+      key = base + String.fromCharCode(96 + suffix);
+    }
+    usedKeys.add(key);
+
+    const lines = ['@article{' + key + ','];
+    lines.push('  title = {' + n.title + '},');
+    if (n.authors) lines.push('  author = {' + n.authors.split(', ').join(' and ') + '},');
+    if (n.year) lines.push('  year = {' + n.year + '},');
+    if (n.doi) lines.push('  doi = {' + n.doi + '},');
+    lines.push('  url = {https://www.semanticscholar.org/paper/' + n.id + '},');
+    lines.push('  note = {' + n.type + ', ' + n.citationCount + ' citations}');
+    lines.push('}');
+    return lines.join('\n');
+  }
+
+  document.getElementById('export-btn').addEventListener('click', () => {
+    if (!currentGraph || !currentGraph.nodes.length) return;
+    const usedKeys = new Set();
+    const entries = currentGraph.nodes.map((n) => nodeToBibtex(n, usedKeys));
+    const blob = new Blob([entries.join('\n\n') + '\n'], { type: 'application/x-bibtex' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'citation-graph-export.bib';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- File handling ----------
+
+  function resetUI() {
+    currentGraph = null;
+    if (simulation) simulation.stop();
+    showControls(false);
+    setProgressVisible(false);
+    setStatus('');
+    initSvg();
+  }
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    resetUI();
+    fileInput.value = '';
+  });
+
+  async function handleFile(file) {
+    resetUI();
+    setStatus('Reading ' + file.name + '...');
+    const text = await file.text();
+    let entries;
+    try {
+      entries = parseBibtex(text).filter((e) => e.fields && (e.fields.title || e.fields.doi));
+    } catch (e) {
+      setStatus('Failed to parse BibTeX file: ' + e.message, true);
+      return;
+    }
+    if (!entries.length) {
+      setStatus('No valid entries found in BibTeX file.', true);
+      return;
+    }
+
+    setProgressVisible(true);
+    let result;
+    try {
+      result = await buildGraph(entries, updateProgress);
+    } catch (e) {
+      setProgressVisible(false);
+      setStatus('Error building graph: ' + e.message, true);
+      return;
+    }
+    setProgressVisible(false);
+
+    currentGraph = result;
+    let summary = 'Loaded ' + result.seedCount + '/' + entries.length + ' seed papers, ' +
+      result.nodes.length + ' total nodes, ' + result.edges.length + ' edges.';
+    if (result.failed.length) {
+      summary += ' Could not resolve: ' + result.failed.slice(0, 5).join('; ') +
+        (result.failed.length > 5 ? ' (+' + (result.failed.length - 5) + ' more)' : '');
+    }
+    setStatus(summary);
+    showControls(true);
+    update();
+  }
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('drag-over');
+  });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  initSvg();
+})();
+</script>
+</body>
+</html>

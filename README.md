@@ -32,6 +32,15 @@ items (title, authors, year, DOI, abstract) directly from the browser to
 `api.zotero.org` — your key/ID are kept only in this browser's local storage
 and never sent anywhere else.
 
+## Semantic Scholar API key (optional)
+
+The unauthenticated tier shares a low, global rate limit, so a busy moment for
+other anonymous users can mean 429s for you too. Paste a free key from
+[semanticscholar.org/product/api](https://www.semanticscholar.org/product/api#api-key-form)
+into the field above the upload box to get a dedicated, higher limit instead.
+It's sent as the `x-api-key` header and stored only in this browser's local
+storage.
+
 ## Notes
 
 - Semantic Scholar requests are routed through a self-hosted `cors-anywhere`

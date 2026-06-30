@@ -26,6 +26,16 @@
   header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
   .subtitle { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
   #upload-section { padding: 1rem 2rem; }
+  .s2-key-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+    margin-bottom: 0.75rem; font-size: 0.85rem;
+  }
+  .s2-key-row label { color: var(--text-muted); }
+  .s2-key-row input {
+    font: inherit; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); min-width: 260px;
+  }
+  .s2-key-row .hint { color: var(--text-muted); font-size: 0.78rem; flex-basis: 100%; }
+  .s2-key-row .hint a { color: var(--seed); }
   #dropzone {
     border: 2px dashed var(--border);
     border-radius: 10px;
@@ -97,6 +107,11 @@
 </header>
 
 <section id="upload-section">
+  <div class="s2-key-row">
+    <label for="s2-api-key">Semantic Scholar API key (optional)</label>
+    <input type="password" id="s2-api-key" placeholder="Leave blank to use the shared anonymous limit" autocomplete="off">
+    <span class="hint">Get one at <a href="https://www.semanticscholar.org/product/api#api-key-form" target="_blank" rel="noopener">semanticscholar.org/product/api</a> for a higher rate limit. Stored only in this browser.</span>
+  </div>
   <div id="dropzone">
     <p>Drag &amp; drop a .bib file here, or <label for="file-input" class="file-link">browse</label></p>
     <input type="file" id="file-input" accept=".bib,.bibtex,text/plain" hidden>
@@ -268,12 +283,18 @@
     dynamicDelay = Math.min(dynamicDelay * 2, MAX_DELAY_MS);
   }
 
+  function s2AuthHeaders() {
+    const input = document.getElementById('s2-api-key');
+    const key = input ? input.value.trim() : '';
+    return key ? { 'x-api-key': key } : {};
+  }
+
   async function fetchJson(url, retry) {
     retry = retry || 0;
     await rateLimit();
     let res;
     try {
-      res = await fetch(url);
+      res = await fetch(url, { headers: s2AuthHeaders() });
     } catch (e) {
       // The Semantic Scholar API omits CORS headers on 429/5xx responses, so a
       // browser fetch() can't see the real status — it just throws. Treat any
@@ -410,6 +431,16 @@
   const progressBar = document.getElementById('progress-bar');
   const controls = document.getElementById('controls');
   const zoteroSection = document.getElementById('zotero-section');
+  const s2ApiKeyInput = document.getElementById('s2-api-key');
+
+  try {
+    s2ApiKeyInput.value = localStorage.getItem('s2_api_key') || '';
+  } catch (e) { /* localStorage unavailable, skip prefill */ }
+  s2ApiKeyInput.addEventListener('change', () => {
+    try {
+      localStorage.setItem('s2_api_key', s2ApiKeyInput.value.trim());
+    } catch (e) { /* localStorage unavailable, skip persistence */ }
+  });
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg;

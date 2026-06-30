@@ -15,11 +15,22 @@ server) and drag in a `.bib` file. It will:
    references in green, discovered citations in orange. Node size scales
    with citation count.
 4. Let you click a node for details + a link to its Semantic Scholar page,
-   toggle the references/citations layers, and export everything discovered
-   as a `.bib` file (e.g. for import into Zotero).
+   toggle the references/citations layers, select papers, and either export
+   everything discovered as a `.bib` file or send selected papers directly
+   into a Zotero library via the Zotero Web API.
 
-No build step, no server, no API key. Everything — including D3, loaded from
-a CDN — lives in `index.html`.
+No build step, no server, no API key required for Semantic Scholar.
+Everything — including D3, loaded from a CDN — lives in `index.html`.
+
+## Zotero integration
+
+Enter a Zotero API key (from [zotero.org/settings/keys](https://www.zotero.org/settings/keys),
+needs library write access) and your numeric user ID, select papers in the
+graph (click a node, check "Include in Zotero send", or use "Select all
+visible"), then click "Send to Zotero". Papers are posted as `journalArticle`
+items (title, authors, year, DOI, abstract) directly from the browser to
+`api.zotero.org` — your key/ID are kept only in this browser's local storage
+and never sent anywhere else.
 
 ## Notes
 

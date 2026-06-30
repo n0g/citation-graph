@@ -55,6 +55,22 @@
   #legend { display: flex; gap: 1rem; margin-left: auto; }
   #legend span { display: flex; align-items: center; gap: 0.35rem; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  #zotero-section {
+    margin: 0 2rem 1.5rem; padding: 1rem 1.25rem; background: #fff;
+    border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem;
+  }
+  #zotero-section h2 { margin: 0 0 0.15rem; font-size: 1rem; }
+  #zotero-section .hint { margin: 0 0 0.75rem; color: var(--text-muted); font-size: 0.8rem; }
+  #zotero-section .hint a { color: var(--seed); }
+  .zotero-inputs { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .zotero-inputs label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--text-muted); }
+  .zotero-inputs input {
+    font: inherit; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); min-width: 220px;
+  }
+  .zotero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+  #selection-count { color: var(--text-muted); }
+  #zotero-status { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); min-height: 1.1em; }
+  .tooltip-select { display: flex; align-items: center; gap: 0.35rem; margin: 0.4rem 0 0; font-size: 0.8rem; color: #0f172a; cursor: pointer; }
   #graph-section { position: relative; padding: 0 2rem 2rem; }
   #graph { width: 100%; height: 65vh; min-height: 420px; display: block; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
   #tooltip {
@@ -101,6 +117,26 @@
   </div>
 </section>
 
+<section id="zotero-section" class="hidden">
+  <h2>Send to Zotero</h2>
+  <p class="hint">Click nodes to select papers (checkbox in the tooltip), then send them straight to your Zotero library. Your key/ID are stored only in this browser's local storage. Get a key from <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>.</p>
+  <div class="zotero-inputs">
+    <label>Zotero API key
+      <input type="password" id="zotero-api-key" placeholder="API key" autocomplete="off">
+    </label>
+    <label>Zotero user ID
+      <input type="text" id="zotero-user-id" placeholder="User ID" autocomplete="off">
+    </label>
+  </div>
+  <div class="zotero-actions">
+    <button id="select-all-btn">Select all visible</button>
+    <button id="clear-selection-btn">Clear selection</button>
+    <span id="selection-count">0 selected</span>
+    <button id="send-zotero-btn" disabled>Send to Zotero</button>
+  </div>
+  <div id="zotero-status"></div>
+</section>
+
 <section id="graph-section">
   <svg id="graph"></svg>
   <div id="tooltip" class="hidden"></div>
@@ -111,17 +147,19 @@
   'use strict';
 
   const S2_BASE = 'https://api.semanticscholar.org/graph/v1';
+  const ZOTERO_BASE = 'https://api.zotero.org';
+  const ZOTERO_BATCH_SIZE = 50;
   const MIN_DELAY_MS = 150;
   const MAX_REFS_PER_PAPER = 50;
   const MAX_CITATIONS_PER_PAPER = 50;
   const COLORS = { seed: '#2563eb', reference: '#16a34a', citation: '#ea580c' };
-  const RESOLVE_FIELDS = 'paperId,title,authors,year,citationCount,externalIds';
+  const RESOLVE_FIELDS = 'paperId,title,authors,year,citationCount,externalIds,abstract';
   const DETAIL_FIELDS = [
-    'title', 'authors', 'year', 'citationCount', 'externalIds',
+    'title', 'authors', 'year', 'citationCount', 'externalIds', 'abstract',
     'references.paperId', 'references.title', 'references.authors',
-    'references.year', 'references.citationCount', 'references.externalIds',
+    'references.year', 'references.citationCount', 'references.externalIds', 'references.abstract',
     'citations.paperId', 'citations.title', 'citations.authors',
-    'citations.year', 'citations.citationCount', 'citations.externalIds'
+    'citations.year', 'citations.citationCount', 'citations.externalIds', 'citations.abstract'
   ].join(',');
 
   // ---------- BibTeX parsing ----------
@@ -291,6 +329,7 @@
       year: paper.year || null,
       citationCount: paper.citationCount || 0,
       doi: (paper.externalIds && paper.externalIds.DOI) || null,
+      abstract: paper.abstract || null,
       type: suggestedType
     };
     map.set(paper.paperId, node);
@@ -366,6 +405,7 @@
   const progressWrap = document.getElementById('progress-bar-wrap');
   const progressBar = document.getElementById('progress-bar');
   const controls = document.getElementById('controls');
+  const zoteroSection = document.getElementById('zotero-section');
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg;
@@ -379,6 +419,7 @@
 
   function showControls(show) {
     controls.classList.toggle('hidden', !show);
+    zoteroSection.classList.toggle('hidden', !show);
   }
 
   function updateProgress(info) {
@@ -395,6 +436,22 @@
   let currentGraph = null;
   let showRefs = true;
   let showCites = true;
+  let selectedIds = new Set();
+  let nodeCircleEls = new Map();
+
+  function refreshSelectionVisuals() {
+    nodeCircleEls.forEach((el, id) => {
+      const selected = selectedIds.has(id);
+      d3.select(el)
+        .attr('stroke', selected ? '#0f172a' : '#fff')
+        .attr('stroke-width', selected ? 3 : 1.5);
+    });
+  }
+
+  function updateSelectionCount() {
+    document.getElementById('selection-count').textContent = selectedIds.size + ' selected';
+    document.getElementById('send-zotero-btn').disabled = selectedIds.size === 0;
+  }
 
   function initSvg() {
     svg = d3.select('#graph');
@@ -475,14 +532,16 @@
     const node = gNode.selectAll('circle').data(nodes, (d) => d.id);
     node.exit().remove();
     const nodeEnter = node.enter().append('circle')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5)
       .style('cursor', 'pointer')
       .call(drag(simulation))
       .on('click', (event, d) => { event.stopPropagation(); showTooltip(event, d); });
     const nodeMerged = nodeEnter.merge(node)
       .attr('r', (d) => radius(d.citationCount))
       .attr('fill', (d) => COLORS[d.type]);
+
+    nodeCircleEls = new Map();
+    nodeMerged.each(function (d) { nodeCircleEls.set(d.id, this); });
+    refreshSelectionVisuals();
 
     simulation.on('tick', () => {
       linkMerged
@@ -511,7 +570,8 @@
       '<h3>' + escapeHtml(d.title) + '</h3>' +
       '<p>' + escapeHtml(d.authors || 'Unknown authors') + '</p>' +
       '<p>' + (d.year || 'Year unknown') + ' &middot; ' + d.citationCount + ' citations</p>' +
-      '<p><a href="https://www.semanticscholar.org/paper/' + encodeURIComponent(d.id) + '" target="_blank" rel="noopener">View on Semantic Scholar &rarr;</a></p>';
+      '<p><a href="https://www.semanticscholar.org/paper/' + encodeURIComponent(d.id) + '" target="_blank" rel="noopener">View on Semantic Scholar &rarr;</a></p>' +
+      '<label class="tooltip-select"><input type="checkbox" id="tooltip-select-cb"' + (selectedIds.has(d.id) ? ' checked' : '') + '> Include in Zotero send</label>';
     tooltip.classList.remove('hidden');
     const rect = document.getElementById('graph-section').getBoundingClientRect();
     const left = Math.min(event.clientX - rect.left + 12, rect.width - 270);
@@ -521,6 +581,12 @@
       e.stopPropagation();
       tooltip.classList.add('hidden');
     };
+    document.getElementById('tooltip-select-cb').addEventListener('change', (e) => {
+      if (e.target.checked) selectedIds.add(d.id);
+      else selectedIds.delete(d.id);
+      refreshSelectionVisuals();
+      updateSelectionCount();
+    });
   }
 
   document.addEventListener('click', (e) => {
@@ -586,14 +652,122 @@
     URL.revokeObjectURL(url);
   });
 
+  // ---------- Zotero integration ----------
+
+  const zoteroApiKeyInput = document.getElementById('zotero-api-key');
+  const zoteroUserIdInput = document.getElementById('zotero-user-id');
+  const zoteroStatusEl = document.getElementById('zotero-status');
+  const sendZoteroBtn = document.getElementById('send-zotero-btn');
+
+  try {
+    zoteroApiKeyInput.value = localStorage.getItem('zotero_api_key') || '';
+    zoteroUserIdInput.value = localStorage.getItem('zotero_user_id') || '';
+  } catch (e) { /* localStorage unavailable, skip prefill */ }
+
+  function setZoteroStatus(msg, isError) {
+    zoteroStatusEl.textContent = msg;
+    zoteroStatusEl.classList.toggle('error', !!isError);
+  }
+
+  document.getElementById('select-all-btn').addEventListener('click', () => {
+    if (!currentGraph) return;
+    const { nodes } = visibleData(currentGraph);
+    nodes.forEach((n) => selectedIds.add(n.id));
+    refreshSelectionVisuals();
+    updateSelectionCount();
+  });
+
+  document.getElementById('clear-selection-btn').addEventListener('click', () => {
+    selectedIds.clear();
+    refreshSelectionVisuals();
+    updateSelectionCount();
+  });
+
+  function splitName(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) return { name: fullName || '' };
+    return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
+  }
+
+  function nodeToZoteroItem(n) {
+    const creators = (n.authors ? n.authors.split(', ') : [])
+      .filter(Boolean)
+      .map((name) => Object.assign({ creatorType: 'author' }, splitName(name)));
+    const item = {
+      itemType: 'journalArticle',
+      title: n.title || '',
+      creators,
+      date: n.year ? String(n.year) : '',
+      url: 'https://www.semanticscholar.org/paper/' + n.id,
+      tags: [{ tag: 'citation-graph-explorer' }]
+    };
+    if (n.doi) item.DOI = n.doi;
+    if (n.abstract) item.abstractNote = n.abstract;
+    return item;
+  }
+
+  async function sendSelectedToZotero() {
+    if (!currentGraph || selectedIds.size === 0) return;
+    const apiKey = zoteroApiKeyInput.value.trim();
+    const userId = zoteroUserIdInput.value.trim();
+    if (!apiKey || !userId) {
+      setZoteroStatus('Enter your Zotero API key and user ID first.', true);
+      return;
+    }
+    try {
+      localStorage.setItem('zotero_api_key', apiKey);
+      localStorage.setItem('zotero_user_id', userId);
+    } catch (e) { /* localStorage unavailable, skip persistence */ }
+
+    const selectedNodes = currentGraph.nodes.filter((n) => selectedIds.has(n.id));
+    const items = selectedNodes.map(nodeToZoteroItem);
+    const chunks = [];
+    for (let i = 0; i < items.length; i += ZOTERO_BATCH_SIZE) chunks.push(items.slice(i, i + ZOTERO_BATCH_SIZE));
+
+    sendZoteroBtn.disabled = true;
+    let successCount = 0;
+    let failCount = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      setZoteroStatus('Sending batch ' + (i + 1) + '/' + chunks.length + ' to Zotero...');
+      try {
+        const res = await fetch(ZOTERO_BASE + '/users/' + encodeURIComponent(userId) + '/items', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Zotero-API-Version': '3',
+            'Zotero-API-Key': apiKey
+          },
+          body: JSON.stringify(chunks[i])
+        });
+        const text = await res.text();
+        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + text.slice(0, 200));
+        const data = JSON.parse(text);
+        successCount += Object.keys(data.successful || {}).length + Object.keys(data.unchanged || {}).length;
+        failCount += Object.keys(data.failed || {}).length;
+      } catch (e) {
+        failCount += chunks[i].length;
+        console.warn('Zotero batch failed', e);
+      }
+      if (i < chunks.length - 1) await sleep(500);
+    }
+
+    updateSelectionCount();
+    const summary = 'Sent to Zotero: ' + successCount + ' succeeded' + (failCount ? ', ' + failCount + ' failed' : '') + '.';
+    setZoteroStatus(summary, failCount > 0 && successCount === 0);
+  }
+
+  sendZoteroBtn.addEventListener('click', sendSelectedToZotero);
+
   // ---------- File handling ----------
 
   function resetUI() {
     currentGraph = null;
     if (simulation) simulation.stop();
+    selectedIds = new Set();
     showControls(false);
     setProgressVisible(false);
     setStatus('');
+    setZoteroStatus('');
     initSvg();
   }
 

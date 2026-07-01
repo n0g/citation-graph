@@ -129,6 +129,7 @@
     <span><i class="dot" style="background:#2563eb"></i> Seed</span>
     <span><i class="dot" style="background:#16a34a"></i> Reference</span>
     <span><i class="dot" style="background:#ea580c"></i> Citation</span>
+    <span title="Size = citation count. Ring = top 10 by citations + connections in this graph"><i class="dot" style="background:transparent;border:2.5px solid #f59e0b"></i> Top 10 central</span>
   </div>
 </section>
 
@@ -471,7 +472,8 @@
 
   // ---------- D3 rendering ----------
 
-  let svg, zoomLayer, gLink, gNode, simulation;
+  let svg, zoomLayer, gLink, gHalo, gNode, simulation;
+  const TOP_IMPORTANT_COUNT = 10;
   let currentGraph = null;
   let showRefs = true;
   let showCites = true;
@@ -511,6 +513,7 @@
 
     zoomLayer = svg.append('g').attr('class', 'zoom-layer');
     gLink = zoomLayer.append('g').attr('class', 'links');
+    gHalo = zoomLayer.append('g').attr('class', 'halos');
     gNode = zoomLayer.append('g').attr('class', 'nodes');
 
     svg.call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', (event) => {
@@ -530,6 +533,40 @@
       ((e.kind === 'reference' && showRefs) || (e.kind === 'citation' && showCites))
     );
     return { nodes, edges };
+  }
+
+  function computeImportance(nodes, edges) {
+    const degree = new Map();
+    nodes.forEach((n) => degree.set(n.id, 0));
+    edges.forEach((e) => {
+      degree.set(e.source, (degree.get(e.source) || 0) + 1);
+      degree.set(e.target, (degree.get(e.target) || 0) + 1);
+    });
+
+    function percentileRanks(valueOf) {
+      const sorted = nodes.slice().sort((a, b) => valueOf(a) - valueOf(b));
+      const ranks = new Map();
+      sorted.forEach((n, i) => ranks.set(n.id, sorted.length > 1 ? i / (sorted.length - 1) : 1));
+      return ranks;
+    }
+
+    const citationRank = percentileRanks((n) => n.citationCount);
+    const degreeRank = percentileRanks((n) => degree.get(n.id) || 0);
+
+    const score = new Map();
+    nodes.forEach((n) => score.set(n.id, (citationRank.get(n.id) + degreeRank.get(n.id)) / 2));
+    return score;
+  }
+
+  function topImportantIds(nodes, edges) {
+    if (nodes.length <= TOP_IMPORTANT_COUNT) return new Set();
+    const score = computeImportance(nodes, edges);
+    return new Set(
+      nodes.slice()
+        .sort((a, b) => score.get(b.id) - score.get(a.id))
+        .slice(0, TOP_IMPORTANT_COUNT)
+        .map((n) => n.id)
+    );
   }
 
   function drag(sim) {
@@ -568,6 +605,18 @@
       .attr('marker-end', 'url(#arrow)');
     const linkMerged = linkEnter.merge(link);
 
+    const importantIds = topImportantIds(nodes, edges);
+    const importantNodes = nodes.filter((n) => importantIds.has(n.id));
+    const halo = gHalo.selectAll('circle').data(importantNodes, (d) => d.id);
+    halo.exit().remove();
+    const haloEnter = halo.enter().append('circle')
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b')
+      .attr('stroke-width', 2.5)
+      .style('pointer-events', 'none');
+    const haloMerged = haloEnter.merge(halo)
+      .attr('r', (d) => radius(d.citationCount) + 5);
+
     const node = gNode.selectAll('circle').data(nodes, (d) => d.id);
     node.exit().remove();
     const nodeEnter = node.enter().append('circle')
@@ -587,6 +636,7 @@
         .attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y)
         .attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
       nodeMerged.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
+      haloMerged.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
     });
   }
 

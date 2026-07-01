@@ -11,9 +11,11 @@ server) and drag in a `.bib` file. It will:
 1. Parse the BibTeX entries and resolve each one to a Semantic Scholar paper
    (by DOI, falling back to a title search).
 2. Fetch references and citations one level deep for each resolved paper.
-3. Render a force-directed graph (D3.js): seed papers in blue, discovered
-   references in green, discovered citations in orange. Node size scales
-   with citation count.
+3. Render a force-directed graph (D3.js), live as results arrive: seed papers
+   in blue, discovered references in green, discovered citations in orange.
+   Node size scales with citation count, and the 10 most "central" papers
+   (a blend of citation count and how connected they are within the
+   discovered graph) get a gold ring so influential sources stand out.
 4. Let you click a node for details + a link to its Semantic Scholar page,
    toggle the references/citations layers, select papers, and either export
    everything discovered as a `.bib` file or send selected papers directly

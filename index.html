@@ -14,153 +14,278 @@
     --text-muted: #64748b;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
   body {
-    margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #0f172a;
     background: #f8fafc;
   }
-  header {
-    padding: 1.5rem 2rem 0.5rem;
-  }
-  header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
-  .subtitle { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
-  #upload-section { padding: 1rem 2rem; }
-  .api-key-row {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
-    margin-bottom: 0.75rem; font-size: 0.85rem;
-  }
-  .api-key-row label { color: var(--text-muted); }
-  .api-key-row input {
-    font: inherit; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); min-width: 260px;
-  }
-  .api-key-row .hint { color: var(--text-muted); font-size: 0.78rem; flex-basis: 100%; }
-  .api-key-row .hint a { color: var(--seed); }
-  #dropzone {
-    border: 2px dashed var(--border);
-    border-radius: 10px;
-    padding: 2rem;
-    text-align: center;
-    background: #fff;
-    transition: border-color 0.15s, background 0.15s;
-  }
-  #dropzone.drag-over { border-color: var(--seed); background: #eff6ff; }
-  .file-link { color: var(--seed); text-decoration: underline; cursor: pointer; }
-  #status { margin-top: 0.75rem; font-size: 0.9rem; color: var(--text-muted); min-height: 1.2em; }
-  #progress-bar-wrap {
-    margin-top: 0.5rem; height: 6px; background: var(--border);
-    border-radius: 3px; overflow: hidden;
-  }
-  #progress-bar { height: 100%; width: 0%; background: var(--seed); transition: width 0.2s; }
-  #controls {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
-    padding: 0 2rem 1rem; font-size: 0.9rem;
-  }
-  #controls label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+  h1 { margin: 0; font-size: 1.15rem; }
+  .subtitle { margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.9rem; }
+  .hint { color: var(--text-muted); font-size: 0.78rem; }
+  .hint a { color: var(--seed); }
   button {
     font: inherit; padding: 0.4rem 0.9rem; border-radius: 6px;
     border: 1px solid var(--border); background: #fff; cursor: pointer;
   }
   button:hover { background: #f1f5f9; }
-  #legend { display: flex; gap: 1rem; margin-left: auto; }
-  #legend span { display: flex; align-items: center; gap: 0.35rem; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .icon-btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .hidden { display: none !important; }
+  .error { color: #dc2626; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+
+  /* ---------- Gate screen ---------- */
+  #gate-screen {
+    position: fixed; inset: 0; z-index: 100; display: flex;
+    align-items: center; justify-content: center; background: #f8fafc;
+  }
+  #gate-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    padding: 2.25rem; width: 90%; max-width: 420px; text-align: center;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  }
+  #gate-card h1 { font-size: 1.4rem; }
+  #gate-card label {
+    display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+    margin: 1.5rem 0 0.5rem; font-size: 0.85rem; color: var(--text-muted);
+  }
+  #gate-card input {
+    width: 100%; font: inherit; padding: 0.55rem 0.75rem; border-radius: 8px;
+    border: 1px solid var(--border); text-align: center;
+  }
+  #gate-continue-btn {
+    width: 100%; margin-top: 0.85rem; padding: 0.6rem; background: var(--seed);
+    color: #fff; border: none; font-weight: 500;
+  }
+  #gate-continue-btn:hover:not(:disabled) { background: #1d4ed8; }
+  #gate-card .hint { margin-top: 0.85rem; }
+  #gate-skip-link { display: inline-block; margin-top: 0.9rem; font-size: 0.8rem; color: var(--text-muted); }
+
+  /* ---------- App shell ---------- */
+  #app-layout { display: flex; height: 100vh; }
+  #sidebar {
+    width: 340px; flex: 0 0 340px; display: flex; flex-direction: column;
+    background: #fff; border-right: 1px solid var(--border); height: 100%;
+  }
+  #sidebar-header { padding: 1.1rem 1.25rem 0.9rem; border-bottom: 1px solid var(--border); }
+  .api-key-row { margin-top: 0.7rem; }
+  .api-key-row label {
+    display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem;
+    color: var(--text-muted); margin-bottom: 0.3rem;
+  }
+  .api-key-row input {
+    width: 100%; font: inherit; padding: 0.35rem 0.6rem; border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  #upload-block { padding: 1rem 1.25rem; }
+  #dropzone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 1.5rem 1rem;
+    text-align: center; font-size: 0.85rem; transition: border-color 0.15s, background 0.15s;
+  }
+  #dropzone.drag-over { border-color: var(--seed); background: #eff6ff; }
+  .file-link { color: var(--seed); text-decoration: underline; cursor: pointer; }
+  #status { margin: 0 1.25rem 0.5rem; font-size: 0.82rem; color: var(--text-muted); min-height: 1.2em; }
+  #progress-bar-wrap { margin: 0 1.25rem 0.75rem; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  #progress-bar { height: 100%; width: 0%; background: var(--seed); transition: width 0.2s; }
+
+  #paper-list-block { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); }
+  #paper-list-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.7rem 1.25rem; font-size: 0.8rem; color: var(--text-muted);
+  }
+  #paper-list-header button { padding: 0.3rem 0.5rem; }
+  #paper-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+  .paper-item {
+    padding: 0.55rem 1.25rem; border-bottom: 1px solid var(--border);
+    font-size: 0.82rem; display: flex; align-items: flex-start; gap: 0.4rem;
+  }
+  .paper-item .paper-text { flex: 1; min-width: 0; }
+  .paper-item .paper-title {
+    font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .paper-item .paper-meta { color: var(--text-muted); font-size: 0.74rem; margin-top: 0.15rem; }
+  .paper-item.failed { background: #fffbeb; color: #b45309; }
+  .paper-item .paper-icon { flex: 0 0 auto; margin-top: 0.15rem; color: #f59e0b; }
+
+  #sidebar-footer { display: flex; gap: 0.5rem; padding: 1rem 1.25rem; border-top: 1px solid var(--border); }
+  #sidebar-footer button { flex: 1; justify-content: center; }
+
+  #canvas-area { flex: 1; position: relative; background: #fff; overflow: hidden; }
+  #graph { width: 100%; height: 100%; display: block; }
+  #canvas-empty-hint {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 0.95rem; pointer-events: none; text-align: center; padding: 2rem;
+  }
+  #canvas-toolbar {
+    position: absolute; top: 1rem; right: 1rem; z-index: 5; display: flex; flex-wrap: wrap;
+    align-items: center; gap: 1rem; background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(4px);
+    padding: 0.5rem 0.85rem; border-radius: 8px; border: 1px solid var(--border); font-size: 0.82rem;
+  }
+  #canvas-toolbar label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+  #legend { display: flex; gap: 0.85rem; }
+  #legend span { display: flex; align-items: center; gap: 0.3rem; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  #zotero-section {
-    margin: 0 2rem 1.5rem; padding: 1rem 1.25rem; background: #fff;
-    border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem;
-  }
-  #zotero-section h2 { margin: 0 0 0.15rem; font-size: 1rem; }
-  #zotero-section .hint { margin: 0 0 0.75rem; color: var(--text-muted); font-size: 0.8rem; }
-  #zotero-section .hint a { color: var(--seed); }
-  .zotero-inputs { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
-  .zotero-inputs label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--text-muted); }
-  .zotero-inputs input {
-    font: inherit; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); min-width: 220px;
-  }
-  .zotero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
-  #selection-count { color: var(--text-muted); }
-  #zotero-status { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); min-height: 1.1em; }
-  .tooltip-select { display: flex; align-items: center; gap: 0.35rem; margin: 0.4rem 0 0; font-size: 0.8rem; color: #0f172a; cursor: pointer; }
-  #graph-section { position: relative; padding: 0 2rem 2rem; }
-  #graph { width: 100%; height: 65vh; min-height: 420px; display: block; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+
   #tooltip {
     position: absolute; max-width: 260px; background: #fff; border: 1px solid var(--border);
     border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 0.75rem 1rem;
-    font-size: 0.85rem;
+    font-size: 0.85rem; pointer-events: none; z-index: 6;
   }
-  #tooltip h3 { margin: 0 0 0.35rem; font-size: 0.95rem; line-height: 1.3; padding-right: 1rem; }
+  #tooltip h3 { margin: 0 0 0.35rem; font-size: 0.95rem; line-height: 1.3; }
   #tooltip p { margin: 0.2rem 0; color: var(--text-muted); }
-  #tooltip a { color: var(--seed); }
-  #tooltip-close {
-    position: absolute; top: 0.3rem; right: 0.4rem; border: none; background: none;
-    cursor: pointer; font-size: 1rem; line-height: 1; padding: 0.2rem;
+  #tooltip a { color: var(--seed); pointer-events: auto; }
+  #tooltip .tooltip-hint { color: var(--seed); font-style: italic; }
+
+  /* ---------- Zotero modal ---------- */
+  #zotero-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; }
+  #zotero-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+  #zotero-modal-content {
+    position: relative; background: #fff; border-radius: 14px; padding: 1.5rem;
+    width: 90%; max-width: 480px; max-height: 82vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
   }
-  .hidden { display: none !important; }
-  .error { color: #dc2626; }
+  #zotero-modal-content h2 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+  #zotero-modal-close {
+    position: absolute; top: 0.9rem; right: 0.9rem; border: none; background: none;
+    cursor: pointer; padding: 0.2rem; color: var(--text-muted);
+  }
+  .zotero-inputs { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.85rem 0; }
+  .zotero-inputs label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--text-muted); flex: 1; min-width: 160px; }
+  .zotero-inputs input { font: inherit; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); }
+  .zotero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+  #selection-count { color: var(--text-muted); font-size: 0.85rem; }
+  #zotero-status { margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-muted); min-height: 1.1em; }
+  #zotero-paper-list {
+    list-style: none; margin: 0.85rem 0; padding: 0; overflow-y: auto; flex: 1;
+    border: 1px solid var(--border); border-radius: 8px; min-height: 80px;
+  }
+  #zotero-paper-list li { border-bottom: 1px solid var(--border); }
+  #zotero-paper-list li:last-child { border-bottom: none; }
+  #zotero-paper-list label {
+    display: flex; align-items: center; gap: 0.55rem; padding: 0.5rem 0.75rem;
+    font-size: 0.83rem; cursor: pointer; margin: 0;
+  }
+  .zotero-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zotero-item-meta { color: var(--text-muted); font-size: 0.76rem; flex: 0 0 auto; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Citation Graph Explorer</h1>
-  <p class="subtitle">Upload a BibTeX file to explore its citation network via the OpenAlex API.</p>
-</header>
-
-<section id="upload-section">
-  <div class="api-key-row">
-    <label for="oa-api-key">OpenAlex API key (optional)</label>
-    <input type="password" id="oa-api-key" placeholder="Leave blank to use the shared anonymous limit" autocomplete="off">
-    <span class="hint">Get one at <a href="https://openalex.org/rest-api" target="_blank" rel="noopener">openalex.org/rest-api</a> for a higher rate limit. Stored only in this browser.</span>
-  </div>
-  <div id="dropzone">
-    <p>Drag &amp; drop a .bib file here, or <label for="file-input" class="file-link">browse</label></p>
-    <input type="file" id="file-input" accept=".bib,.bibtex,text/plain" hidden>
-  </div>
-  <div id="status"></div>
-  <div id="progress-bar-wrap" class="hidden"><div id="progress-bar"></div></div>
-</section>
-
-<section id="controls" class="hidden">
-  <label><input type="checkbox" id="toggle-refs" checked> Show references</label>
-  <label><input type="checkbox" id="toggle-cites" checked> Show citations</label>
-  <button id="export-btn">Export BibTeX</button>
-  <button id="reset-btn">Load another file</button>
-  <div id="legend">
-    <span><i class="dot" style="background:#2563eb"></i> Seed</span>
-    <span><i class="dot" style="background:#16a34a"></i> Reference</span>
-    <span><i class="dot" style="background:#ea580c"></i> Citation</span>
-    <span title="Size = citation count. Ring = top 10 by citations + connections in this graph"><i class="dot" style="background:transparent;border:2.5px solid #f59e0b"></i> Top 10 central</span>
-  </div>
-</section>
-
-<section id="zotero-section" class="hidden">
-  <h2>Send to Zotero</h2>
-  <p class="hint">Click nodes to select papers (checkbox in the tooltip), then send them straight to your Zotero library. Your key/ID are stored only in this browser's local storage. Get a key from <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>.</p>
-  <div class="zotero-inputs">
-    <label>Zotero API key
-      <input type="password" id="zotero-api-key" placeholder="API key" autocomplete="off">
+<div id="gate-screen">
+  <div id="gate-card">
+    <h1>Citation Graph Explorer</h1>
+    <p class="subtitle">Turn a BibTeX bibliography into an interactive citation network via OpenAlex.</p>
+    <label for="gate-api-key">
+      <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z"/></svg>
+      OpenAlex API key
     </label>
-    <label>Zotero user ID
-      <input type="text" id="zotero-user-id" placeholder="User ID" autocomplete="off">
-    </label>
+    <input type="password" id="gate-api-key" placeholder="Paste your API key" autocomplete="off" autofocus>
+    <button id="gate-continue-btn" disabled>Continue</button>
+    <p class="hint">An API key avoids the shared anonymous rate limit. Get one free at <a href="https://openalex.org/rest-api" target="_blank" rel="noopener">openalex.org/rest-api</a>.</p>
+    <a href="#" id="gate-skip-link">Skip for now, use the anonymous limit</a>
   </div>
-  <div class="zotero-actions">
-    <button id="select-all-btn">Select all visible</button>
-    <button id="clear-selection-btn">Clear selection</button>
-    <span id="selection-count">0 selected</span>
-    <button id="send-zotero-btn" disabled>Send to Zotero</button>
-  </div>
-  <div id="zotero-status"></div>
-</section>
+</div>
 
-<section id="graph-section">
-  <svg id="graph"></svg>
-  <div id="tooltip" class="hidden"></div>
-</section>
+<div id="app-layout" class="hidden">
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <h1>Citation Graph Explorer</h1>
+      <div class="api-key-row">
+        <label for="oa-api-key">
+          <svg width="12" height="12" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z"/></svg>
+          OpenAlex API key
+        </label>
+        <input type="password" id="oa-api-key" placeholder="Optional" autocomplete="off">
+      </div>
+    </div>
+
+    <div id="upload-block">
+      <div id="dropzone">
+        <p>Drag &amp; drop a .bib file here, or <label for="file-input" class="file-link">browse</label></p>
+        <input type="file" id="file-input" accept=".bib,.bibtex,text/plain" hidden>
+      </div>
+    </div>
+    <div id="status"></div>
+    <div id="progress-bar-wrap" class="hidden"><div id="progress-bar"></div></div>
+
+    <div id="paper-list-block" class="hidden">
+      <div id="paper-list-header">
+        <span><span id="paper-count">0</span> papers</span>
+        <button id="reset-btn" class="icon-btn" title="Load another file">
+          <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>
+        </button>
+      </div>
+      <ul id="paper-list"></ul>
+    </div>
+
+    <div id="sidebar-footer" class="hidden">
+      <button id="export-btn" class="icon-btn" title="Export all discovered papers as BibTeX">
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z"/></svg>
+        Export
+      </button>
+      <button id="zotero-open-btn" class="icon-btn" title="Send papers to Zotero">
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M231.65,194.55,198.46,36.75a16,16,0,0,0-19-12.39L132.65,34.42a16.08,16.08,0,0,0-12.3,19l33.19,157.8A16,16,0,0,0,169.16,224a16.25,16.25,0,0,0,3.38-.36l46.81-10.06A16.09,16.09,0,0,0,231.65,194.55ZM136,50.15c0-.06,0-.09,0-.09l46.8-10,3.33,15.87L139.33,66Zm6.62,31.47,46.82-10.05,3.34,15.9L146,97.53Zm6.64,31.57,46.82-10.06,13.3,63.24-46.82,10.06ZM216,197.94l-46.8,10-3.33-15.87L212.67,182,216,197.85C216,197.91,216,197.94,216,197.94ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,48h48V64H56Zm0,32h48v96H56Zm48,128H56V192h48v16Z"/></svg>
+        Zotero
+      </button>
+    </div>
+  </aside>
+
+  <main id="canvas-area">
+    <div id="canvas-toolbar">
+      <label><input type="checkbox" id="toggle-refs" checked> References</label>
+      <label><input type="checkbox" id="toggle-cites" checked> Citations</label>
+      <div id="legend">
+        <span><i class="dot" style="background:#2563eb"></i> Seed</span>
+        <span><i class="dot" style="background:#16a34a"></i> Reference</span>
+        <span><i class="dot" style="background:#ea580c"></i> Citation</span>
+        <span title="Size = citation count. Ring = top 10 most-connected papers not yet in your list — good candidates to expand next"><i class="dot" style="background:transparent;border:2.5px solid #f59e0b"></i> Worth expanding</span>
+      </div>
+    </div>
+    <svg id="graph"></svg>
+    <div id="canvas-empty-hint">Load a BibTeX file to start exploring its citation network.<br>Click any node once it appears to expand its own references &amp; citations.</div>
+    <div id="tooltip" class="hidden"></div>
+  </main>
+</div>
+
+<div id="zotero-modal" class="hidden">
+  <div id="zotero-modal-backdrop"></div>
+  <div id="zotero-modal-content">
+    <button id="zotero-modal-close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>
+    </button>
+    <h2>Send to Zotero</h2>
+    <p class="hint">Check the papers you want, then send them straight to your Zotero library. Your key/ID are stored only in this browser's local storage. Get a key from <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>.</p>
+    <div class="zotero-inputs">
+      <label>Zotero API key
+        <input type="password" id="zotero-api-key" placeholder="API key" autocomplete="off">
+      </label>
+      <label>Zotero user ID
+        <input type="text" id="zotero-user-id" placeholder="User ID" autocomplete="off">
+      </label>
+    </div>
+    <div class="zotero-actions">
+      <button id="select-all-btn">Select all</button>
+      <button id="clear-selection-btn">Clear</button>
+      <span id="selection-count">0 selected</span>
+    </div>
+    <ul id="zotero-paper-list"></ul>
+    <div class="zotero-actions">
+      <button id="send-zotero-btn" disabled>Send to Zotero</button>
+    </div>
+    <div id="zotero-status"></div>
+  </div>
+</div>
 
 <script>
 (function () {
   'use strict';
+
+  const ICONS = {
+    warning: '<svg class="paper-icon" width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg>',
+    spinner: '<svg class="paper-icon spin" width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z"/></svg>'
+  };
 
   // OpenAlex supports CORS natively, so unlike Semantic Scholar this needs no proxy.
   const OPENALEX_BASE = 'https://api.openalex.org';
@@ -255,6 +380,12 @@
     return title || null;
   }
 
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
   // ---------- OpenAlex API ----------
 
   let lastRequestTime = 0;
@@ -331,8 +462,8 @@
     return words.join(' ').replace(/\s+/g, ' ').trim() || null;
   }
 
-  // Adapts an OpenAlex "work" into the {paperId, title, authors, year,
-  // citationCount, externalIds, abstract} shape addOrUpdateNode expects.
+  // Adapts an OpenAlex "work" into the paper shape addOrUpdateNode expects,
+  // including the raw referenced-work IDs needed to expand it further later.
   function oaWorkToPaper(work) {
     if (!work || !work.id) return null;
     return {
@@ -342,7 +473,8 @@
       year: work.publication_year || null,
       citationCount: work.cited_by_count || 0,
       externalIds: work.doi ? { DOI: work.doi.replace(/^https?:\/\/doi\.org\//i, '') } : {},
-      abstract: reconstructAbstract(work.abstract_inverted_index)
+      abstract: reconstructAbstract(work.abstract_inverted_index),
+      referencedWorkIds: (work.referenced_works || []).map(normalizeOaId).filter(Boolean)
     };
   }
 
@@ -353,9 +485,7 @@
       try {
         const work = await fetchJson(OPENALEX_BASE + '/works/doi:' + encodeURIComponent(doi) + buildQuery({}));
         const paper = oaWorkToPaper(work);
-        if (paper) {
-          return { paper, referencedWorkIds: (work.referenced_works || []).map(normalizeOaId).filter(Boolean) };
-        }
+        if (paper) return paper;
       } catch (e) { console.warn(e.message); }
     }
     if (title) {
@@ -363,9 +493,7 @@
         const data = await fetchJson(OPENALEX_BASE + '/works' + buildQuery({ search: title, per_page: 1 }));
         const work = data && data.results && data.results[0];
         const paper = oaWorkToPaper(work);
-        if (paper) {
-          return { paper, referencedWorkIds: (work.referenced_works || []).map(normalizeOaId).filter(Boolean) };
-        }
+        if (paper) return paper;
       } catch (e) { console.warn(e.message); }
     }
     return null;
@@ -382,13 +510,16 @@
     return (data && data.results) || [];
   }
 
-  // ---------- Graph building ----------
+  // ---------- Graph data ----------
 
   function addOrUpdateNode(map, paper, suggestedType) {
     if (!paper || !paper.paperId) return null;
     const existing = map.get(paper.paperId);
     if (existing) {
       if (suggestedType === 'seed') existing.type = 'seed';
+      if (paper.referencedWorkIds && paper.referencedWorkIds.length && !(existing.referencedWorkIds && existing.referencedWorkIds.length)) {
+        existing.referencedWorkIds = paper.referencedWorkIds;
+      }
       return existing;
     }
     const node = {
@@ -399,103 +530,203 @@
       citationCount: paper.citationCount || 0,
       doi: (paper.externalIds && paper.externalIds.DOI) || null,
       abstract: paper.abstract || null,
+      referencedWorkIds: paper.referencedWorkIds || [],
       type: suggestedType
     };
     map.set(paper.paperId, node);
     return node;
   }
 
-  async function buildGraph(entries, progressCb, onUpdate) {
-    const nodes = new Map();
-    const edgeKeys = new Set();
-    const edges = [];
-    const seeds = [];
+  function graphMapsFromCurrent() {
+    const nodesMap = new Map(currentGraph.nodes.map((n) => [n.id, n]));
+    const edgeKeys = new Set(currentGraph.edges.map((e) => e.source + '>' + e.target + '>' + e.kind));
+    return { nodesMap, edgeKeys };
+  }
+
+  let expandedIds = new Set();
+  let expandingIds = new Set();
+
+  // Fetches a node's references (batch ID lookup) and citations (cites:
+  // filter) and merges them into currentGraph. Shared by the initial bulk
+  // load and by clicking a node in the graph to expand it further.
+  async function expandNode(nodeId) {
+    if (!currentGraph || expandedIds.has(nodeId) || expandingIds.has(nodeId)) return;
+    const node = currentGraph.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    expandingIds.add(nodeId);
+    node.type = 'seed';
+    ensureInPaperList(nodeId);
+    renderPaperList();
+    update();
+    setStatus('Expanding "' + node.title + '"...');
+
+    const { nodesMap, edgeKeys } = graphMapsFromCurrent();
+
+    const refIds = (node.referencedWorkIds || []).slice(0, MAX_REFS_PER_PAPER);
+    if (refIds.length) {
+      try {
+        const refWorks = await fetchWorksByIds(refIds);
+        for (const w of refWorks) {
+          const paper = oaWorkToPaper(w);
+          if (!paper) continue;
+          addOrUpdateNode(nodesMap, paper, 'reference');
+          const key = nodeId + '>' + paper.paperId + '>reference';
+          if (!edgeKeys.has(key)) {
+            edgeKeys.add(key);
+            currentGraph.edges.push({ source: nodeId, target: paper.paperId, kind: 'reference' });
+          }
+        }
+      } catch (e) { console.warn('expand references failed', nodeId, e); }
+    }
+
+    try {
+      const citingWorks = await fetchCitingWorks(nodeId, MAX_CITATIONS_PER_PAPER);
+      for (const w of citingWorks) {
+        const paper = oaWorkToPaper(w);
+        if (!paper) continue;
+        addOrUpdateNode(nodesMap, paper, 'citation');
+        const key = paper.paperId + '>' + nodeId + '>citation';
+        if (!edgeKeys.has(key)) {
+          edgeKeys.add(key);
+          currentGraph.edges.push({ source: paper.paperId, target: nodeId, kind: 'citation' });
+        }
+      }
+    } catch (e) { console.warn('expand citations failed', nodeId, e); }
+
+    currentGraph.nodes = Array.from(nodesMap.values());
+    expandingIds.delete(nodeId);
+    expandedIds.add(nodeId);
+    renderPaperList();
+    setStatus(currentGraph.nodes.length + ' total nodes, ' + currentGraph.edges.length + ' edges.');
+    update();
+  }
+
+  async function loadEntries(entries, progressCb) {
     const failed = [];
-    const emitUpdate = () => onUpdate(Array.from(nodes.values()), edges.slice());
+    const seedIds = [];
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const label = extractTitle(entry) || entry.key;
       progressCb({ phase: 'resolve', current: i + 1, total: entries.length, label });
-      let resolved = null;
+      let paper = null;
       try {
-        resolved = await resolvePaper(entry);
+        paper = await resolvePaper(entry);
       } catch (e) {
         console.warn('resolve failed', entry.key, e);
       }
-      if (resolved && resolved.paper && resolved.paper.paperId) {
-        const node = addOrUpdateNode(nodes, resolved.paper, 'seed');
-        seeds.push({ id: node.id, referencedWorkIds: resolved.referencedWorkIds || [] });
-        emitUpdate();
+      if (paper && paper.paperId) {
+        const { nodesMap } = graphMapsFromCurrent();
+        const node = addOrUpdateNode(nodesMap, paper, 'seed');
+        currentGraph.nodes = Array.from(nodesMap.values());
+        seedIds.push(node.id);
+        ensureInPaperList(node.id);
+        renderPaperList();
+        update();
       } else {
         failed.push(label);
+        paperListEntries.push({ status: 'failed', label });
+        renderPaperList();
       }
     }
 
-    for (let i = 0; i < seeds.length; i++) {
-      const seed = seeds[i];
-      progressCb({ phase: 'expand', current: i + 1, total: seeds.length, label: nodes.get(seed.id).title });
-
-      const refIds = seed.referencedWorkIds.slice(0, MAX_REFS_PER_PAPER);
-      if (refIds.length) {
-        try {
-          const refWorks = await fetchWorksByIds(refIds);
-          for (const w of refWorks) {
-            const paper = oaWorkToPaper(w);
-            if (!paper) continue;
-            addOrUpdateNode(nodes, paper, 'reference');
-            const key = seed.id + '>' + paper.paperId + '>reference';
-            if (!edgeKeys.has(key)) {
-              edgeKeys.add(key);
-              edges.push({ source: seed.id, target: paper.paperId, kind: 'reference' });
-            }
-          }
-        } catch (e) {
-          console.warn('references failed', seed.id, e);
-        }
-      }
-
-      try {
-        const citingWorks = await fetchCitingWorks(seed.id, MAX_CITATIONS_PER_PAPER);
-        for (const w of citingWorks) {
-          const paper = oaWorkToPaper(w);
-          if (!paper) continue;
-          addOrUpdateNode(nodes, paper, 'citation');
-          const key = paper.paperId + '>' + seed.id + '>citation';
-          if (!edgeKeys.has(key)) {
-            edgeKeys.add(key);
-            edges.push({ source: paper.paperId, target: seed.id, kind: 'citation' });
-          }
-        }
-      } catch (e) {
-        console.warn('citations failed', seed.id, e);
-      }
-
-      emitUpdate();
+    for (let i = 0; i < seedIds.length; i++) {
+      const seedNode = currentGraph.nodes.find((n) => n.id === seedIds[i]);
+      progressCb({ phase: 'expand', current: i + 1, total: seedIds.length, label: seedNode ? seedNode.title : seedIds[i] });
+      await expandNode(seedIds[i]);
     }
 
-    return { nodes: Array.from(nodes.values()), edges, failed, seedCount: seeds.length };
+    return { failed, seedCount: seedIds.length };
   }
 
-  // ---------- UI helpers ----------
+  // ---------- Gate screen ----------
+
+  const gateScreen = document.getElementById('gate-screen');
+  const appLayout = document.getElementById('app-layout');
+  const gateApiKeyInput = document.getElementById('gate-api-key');
+  const gateContinueBtn = document.getElementById('gate-continue-btn');
+  const oaApiKeyInput = document.getElementById('oa-api-key');
+
+  function enterApp() {
+    gateScreen.classList.add('hidden');
+    appLayout.classList.remove('hidden');
+  }
+
+  let storedOaKey = '';
+  try { storedOaKey = localStorage.getItem('oa_api_key') || ''; } catch (e) { /* localStorage unavailable */ }
+
+  if (storedOaKey) {
+    oaApiKeyInput.value = storedOaKey;
+    enterApp();
+  } else {
+    gateApiKeyInput.addEventListener('input', () => {
+      gateContinueBtn.disabled = !gateApiKeyInput.value.trim();
+    });
+    gateApiKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && gateApiKeyInput.value.trim()) gateContinueBtn.click();
+    });
+    gateContinueBtn.addEventListener('click', () => {
+      const key = gateApiKeyInput.value.trim();
+      if (!key) return;
+      oaApiKeyInput.value = key;
+      try { localStorage.setItem('oa_api_key', key); } catch (e) { /* localStorage unavailable */ }
+      enterApp();
+    });
+    document.getElementById('gate-skip-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      enterApp();
+    });
+  }
+
+  oaApiKeyInput.addEventListener('change', () => {
+    try {
+      localStorage.setItem('oa_api_key', oaApiKeyInput.value.trim());
+    } catch (e) { /* localStorage unavailable, skip persistence */ }
+  });
+
+  // ---------- Sidebar / paper list ----------
 
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
   const statusEl = document.getElementById('status');
   const progressWrap = document.getElementById('progress-bar-wrap');
   const progressBar = document.getElementById('progress-bar');
-  const controls = document.getElementById('controls');
-  const zoteroSection = document.getElementById('zotero-section');
-  const oaApiKeyInput = document.getElementById('oa-api-key');
+  const uploadBlock = document.getElementById('upload-block');
+  const paperListBlock = document.getElementById('paper-list-block');
+  const sidebarFooter = document.getElementById('sidebar-footer');
+  const paperListEl = document.getElementById('paper-list');
+  const paperCountEl = document.getElementById('paper-count');
 
-  try {
-    oaApiKeyInput.value = localStorage.getItem('oa_api_key') || '';
-  } catch (e) { /* localStorage unavailable, skip prefill */ }
-  oaApiKeyInput.addEventListener('change', () => {
-    try {
-      localStorage.setItem('oa_api_key', oaApiKeyInput.value.trim());
-    } catch (e) { /* localStorage unavailable, skip persistence */ }
-  });
+  let paperListEntries = []; // { status: 'ok', nodeId } | { status: 'failed', label }
+
+  function ensureInPaperList(nodeId) {
+    if (!paperListEntries.some((e) => e.status === 'ok' && e.nodeId === nodeId)) {
+      paperListEntries.push({ status: 'ok', nodeId });
+    }
+  }
+
+  function renderPaperList() {
+    paperListEl.innerHTML = '';
+    let okCount = 0;
+    paperListEntries.forEach((entry) => {
+      const li = document.createElement('li');
+      if (entry.status === 'failed') {
+        li.className = 'paper-item failed';
+        li.innerHTML = ICONS.warning + '<div class="paper-text"><div class="paper-title">' + escapeHtml(entry.label) + '</div><div class="paper-meta">Could not resolve</div></div>';
+      } else {
+        const node = currentGraph && currentGraph.nodes.find((n) => n.id === entry.nodeId);
+        if (!node) return;
+        okCount++;
+        li.className = 'paper-item';
+        const spinner = expandingIds.has(node.id) ? ICONS.spinner : '';
+        const meta = [node.year, node.authors ? node.authors.split(',')[0] : ''].filter(Boolean).join(' · ');
+        li.innerHTML = '<div class="paper-text"><div class="paper-title">' + escapeHtml(node.title) + '</div><div class="paper-meta">' + escapeHtml(meta) + '</div></div>' + spinner;
+      }
+      paperListEl.appendChild(li);
+    });
+    paperCountEl.textContent = okCount;
+  }
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg;
@@ -507,9 +738,10 @@
     if (!visible) progressBar.style.width = '0%';
   }
 
-  function showControls(show) {
-    controls.classList.toggle('hidden', !show);
-    zoteroSection.classList.toggle('hidden', !show);
+  function showPaperListAndFooter(show) {
+    uploadBlock.classList.toggle('hidden', show);
+    paperListBlock.classList.toggle('hidden', !show);
+    sidebarFooter.classList.toggle('hidden', !show);
   }
 
   function updateProgress(info) {
@@ -571,6 +803,10 @@
     }));
   }
 
+  function setCanvasEmpty(empty) {
+    document.getElementById('canvas-empty-hint').classList.toggle('hidden', !empty);
+  }
+
   function visibleData(graph) {
     const nodes = graph.nodes.filter((n) =>
       n.type === 'seed' ||
@@ -585,35 +821,26 @@
     return { nodes, edges };
   }
 
-  function computeImportance(nodes, edges) {
+  function computeDegree(nodes, edges) {
     const degree = new Map();
     nodes.forEach((n) => degree.set(n.id, 0));
     edges.forEach((e) => {
       degree.set(e.source, (degree.get(e.source) || 0) + 1);
       degree.set(e.target, (degree.get(e.target) || 0) + 1);
     });
-
-    function percentileRanks(valueOf) {
-      const sorted = nodes.slice().sort((a, b) => valueOf(a) - valueOf(b));
-      const ranks = new Map();
-      sorted.forEach((n, i) => ranks.set(n.id, sorted.length > 1 ? i / (sorted.length - 1) : 1));
-      return ranks;
-    }
-
-    const citationRank = percentileRanks((n) => n.citationCount);
-    const degreeRank = percentileRanks((n) => degree.get(n.id) || 0);
-
-    const score = new Map();
-    nodes.forEach((n) => score.set(n.id, (citationRank.get(n.id) + degreeRank.get(n.id)) / 2));
-    return score;
+    return degree;
   }
 
+  // Highlights well-connected papers that aren't in the paper list yet —
+  // i.e. good candidates to click and expand next — ranked by how many
+  // discovered edges they have in this graph, not by citation count.
   function topImportantIds(nodes, edges) {
-    if (nodes.length <= TOP_IMPORTANT_COUNT) return new Set();
-    const score = computeImportance(nodes, edges);
+    const candidates = nodes.filter((n) => n.type !== 'seed');
+    if (candidates.length <= TOP_IMPORTANT_COUNT) return new Set();
+    const degree = computeDegree(nodes, edges);
     return new Set(
-      nodes.slice()
-        .sort((a, b) => score.get(b.id) - score.get(a.id))
+      candidates.slice()
+        .sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0))
         .slice(0, TOP_IMPORTANT_COUNT)
         .map((n) => n.id)
     );
@@ -621,7 +848,7 @@
 
   function drag(sim) {
     // Only reheat the simulation once actual movement happens, not on every
-    // mousedown — otherwise a plain click-to-open-tooltip jolts the whole graph.
+    // mousedown — otherwise a plain click-to-expand jolts the whole graph.
     let dragging = false;
     function started(event, d) {
       dragging = false;
@@ -682,7 +909,10 @@
     const nodeEnter = node.enter().append('circle')
       .style('cursor', 'pointer')
       .call(drag(simulation))
-      .on('click', (event, d) => { event.stopPropagation(); showTooltip(event, d); });
+      .on('mouseenter', (event, d) => showTooltip(event, d))
+      .on('mousemove', (event) => positionTooltip(event))
+      .on('mouseleave', () => hideTooltip())
+      .on('click', (event, d) => { event.stopPropagation(); expandNode(d.id); });
     const nodeMerged = nodeEnter.merge(node)
       .attr('r', (d) => radius(d.citationCount))
       .attr('fill', (d) => COLORS[d.type]);
@@ -702,46 +932,35 @@
 
   function update() {
     if (!currentGraph) return;
+    setCanvasEmpty(currentGraph.nodes.length === 0);
     const { nodes, edges } = visibleData(currentGraph);
     drawGraph(nodes, edges);
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str || '';
-    return div.innerHTML;
   }
 
   function showTooltip(event, d) {
     const tooltip = document.getElementById('tooltip');
     tooltip.innerHTML =
-      '<button id="tooltip-close" aria-label="Close">&times;</button>' +
       '<h3>' + escapeHtml(d.title) + '</h3>' +
       '<p>' + escapeHtml(d.authors || 'Unknown authors') + '</p>' +
       '<p>' + (d.year || 'Year unknown') + ' &middot; ' + d.citationCount + ' citations</p>' +
       '<p><a href="https://openalex.org/' + encodeURIComponent(d.id) + '" target="_blank" rel="noopener">View on OpenAlex &rarr;</a></p>' +
-      '<label class="tooltip-select"><input type="checkbox" id="tooltip-select-cb"' + (selectedIds.has(d.id) ? ' checked' : '') + '> Include in Zotero send</label>';
+      (expandedIds.has(d.id) || expandingIds.has(d.id) ? '' : '<p class="tooltip-hint">Click to expand its references &amp; citations</p>');
     tooltip.classList.remove('hidden');
-    const rect = document.getElementById('graph-section').getBoundingClientRect();
-    const left = Math.min(event.clientX - rect.left + 12, rect.width - 270);
-    tooltip.style.left = Math.max(left, 0) + 'px';
-    tooltip.style.top = (event.clientY - rect.top + 12) + 'px';
-    document.getElementById('tooltip-close').onclick = (e) => {
-      e.stopPropagation();
-      tooltip.classList.add('hidden');
-    };
-    document.getElementById('tooltip-select-cb').addEventListener('change', (e) => {
-      if (e.target.checked) selectedIds.add(d.id);
-      else selectedIds.delete(d.id);
-      refreshSelectionVisuals();
-      updateSelectionCount();
-    });
+    positionTooltip(event);
   }
 
-  document.addEventListener('click', (e) => {
+  function positionTooltip(event) {
     const tooltip = document.getElementById('tooltip');
-    if (!tooltip.contains(e.target)) tooltip.classList.add('hidden');
-  });
+    const rect = document.getElementById('canvas-area').getBoundingClientRect();
+    const left = Math.min(event.clientX - rect.left + 14, rect.width - 274);
+    const top = Math.min(event.clientY - rect.top + 14, rect.height - 140);
+    tooltip.style.left = Math.max(left, 8) + 'px';
+    tooltip.style.top = Math.max(top, 8) + 'px';
+  }
+
+  function hideTooltip() {
+    document.getElementById('tooltip').classList.add('hidden');
+  }
 
   document.getElementById('toggle-refs').addEventListener('change', (e) => {
     showRefs = e.target.checked;
@@ -803,10 +1022,12 @@
 
   // ---------- Zotero integration ----------
 
+  const zoteroModal = document.getElementById('zotero-modal');
   const zoteroApiKeyInput = document.getElementById('zotero-api-key');
   const zoteroUserIdInput = document.getElementById('zotero-user-id');
   const zoteroStatusEl = document.getElementById('zotero-status');
   const sendZoteroBtn = document.getElementById('send-zotero-btn');
+  const zoteroPaperListEl = document.getElementById('zotero-paper-list');
 
   try {
     zoteroApiKeyInput.value = localStorage.getItem('zotero_api_key') || '';
@@ -818,18 +1039,50 @@
     zoteroStatusEl.classList.toggle('error', !!isError);
   }
 
+  function renderZoteroPaperList() {
+    zoteroPaperListEl.innerHTML = '';
+    if (!currentGraph) { updateSelectionCount(); return; }
+    currentGraph.nodes.forEach((n) => {
+      const li = document.createElement('li');
+      const meta = n.year || '';
+      li.innerHTML = '<label><input type="checkbox" data-id="' + escapeHtml(n.id) + '"' + (selectedIds.has(n.id) ? ' checked' : '') + '>' +
+        '<span class="zotero-item-title">' + escapeHtml(n.title) + '</span>' +
+        '<span class="zotero-item-meta">' + escapeHtml(String(meta)) + '</span></label>';
+      zoteroPaperListEl.appendChild(li);
+    });
+    zoteroPaperListEl.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-id');
+        if (e.target.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        refreshSelectionVisuals();
+        updateSelectionCount();
+      });
+    });
+    updateSelectionCount();
+  }
+
+  document.getElementById('zotero-open-btn').addEventListener('click', () => {
+    renderZoteroPaperList();
+    zoteroModal.classList.remove('hidden');
+  });
+  document.getElementById('zotero-modal-close').addEventListener('click', () => zoteroModal.classList.add('hidden'));
+  document.getElementById('zotero-modal-backdrop').addEventListener('click', () => zoteroModal.classList.add('hidden'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') zoteroModal.classList.add('hidden');
+  });
+
   document.getElementById('select-all-btn').addEventListener('click', () => {
     if (!currentGraph) return;
-    const { nodes } = visibleData(currentGraph);
-    nodes.forEach((n) => selectedIds.add(n.id));
+    currentGraph.nodes.forEach((n) => selectedIds.add(n.id));
     refreshSelectionVisuals();
-    updateSelectionCount();
+    renderZoteroPaperList();
   });
 
   document.getElementById('clear-selection-btn').addEventListener('click', () => {
     selectedIds.clear();
     refreshSelectionVisuals();
-    updateSelectionCount();
+    renderZoteroPaperList();
   });
 
   function splitName(fullName) {
@@ -910,10 +1163,15 @@
   // ---------- File handling ----------
 
   function resetUI() {
-    currentGraph = null;
+    currentGraph = { nodes: [], edges: [] };
     if (simulation) simulation.stop();
     selectedIds = new Set();
-    showControls(false);
+    expandedIds = new Set();
+    expandingIds = new Set();
+    paperListEntries = [];
+    renderPaperList();
+    showPaperListAndFooter(false);
+    setCanvasEmpty(true);
     setProgressVisible(false);
     setStatus('');
     setZoteroStatus('');
@@ -942,17 +1200,11 @@
     }
 
     setProgressVisible(true);
-    currentGraph = { nodes: [], edges: [] };
-    showControls(true);
-    const onUpdate = (nodes, edges) => {
-      currentGraph.nodes = nodes;
-      currentGraph.edges = edges;
-      update();
-    };
+    showPaperListAndFooter(true);
 
     let result;
     try {
-      result = await buildGraph(entries, updateProgress, onUpdate);
+      result = await loadEntries(entries, updateProgress);
     } catch (e) {
       setProgressVisible(false);
       setStatus('Error building graph: ' + e.message, true);
@@ -960,9 +1212,8 @@
     }
     setProgressVisible(false);
 
-    currentGraph = result;
     let summary = 'Loaded ' + result.seedCount + '/' + entries.length + ' seed papers, ' +
-      result.nodes.length + ' total nodes, ' + result.edges.length + ' edges.';
+      currentGraph.nodes.length + ' total nodes, ' + currentGraph.edges.length + ' edges.';
     if (result.failed.length) {
       summary += ' Could not resolve: ' + result.failed.slice(0, 5).join('; ') +
         (result.failed.length > 5 ? ' (+' + (result.failed.length - 5) + ' more)' : '');
@@ -986,6 +1237,7 @@
     if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
   });
 
+  currentGraph = { nodes: [], edges: [] };
   initSvg();
 })();
 </script>

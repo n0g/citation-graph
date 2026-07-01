@@ -26,16 +26,16 @@
   header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
   .subtitle { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
   #upload-section { padding: 1rem 2rem; }
-  .s2-key-row {
+  .api-key-row {
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
     margin-bottom: 0.75rem; font-size: 0.85rem;
   }
-  .s2-key-row label { color: var(--text-muted); }
-  .s2-key-row input {
+  .api-key-row label { color: var(--text-muted); }
+  .api-key-row input {
     font: inherit; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); min-width: 260px;
   }
-  .s2-key-row .hint { color: var(--text-muted); font-size: 0.78rem; flex-basis: 100%; }
-  .s2-key-row .hint a { color: var(--seed); }
+  .api-key-row .hint { color: var(--text-muted); font-size: 0.78rem; flex-basis: 100%; }
+  .api-key-row .hint a { color: var(--seed); }
   #dropzone {
     border: 2px dashed var(--border);
     border-radius: 10px;
@@ -103,14 +103,14 @@
 
 <header>
   <h1>Citation Graph Explorer</h1>
-  <p class="subtitle">Upload a BibTeX file to explore its citation network via the Semantic Scholar API.</p>
+  <p class="subtitle">Upload a BibTeX file to explore its citation network via the OpenAlex API.</p>
 </header>
 
 <section id="upload-section">
-  <div class="s2-key-row">
-    <label for="s2-api-key">Semantic Scholar API key (optional)</label>
-    <input type="password" id="s2-api-key" placeholder="Leave blank to use the shared anonymous limit" autocomplete="off">
-    <span class="hint">Get one at <a href="https://www.semanticscholar.org/product/api#api-key-form" target="_blank" rel="noopener">semanticscholar.org/product/api</a> for a higher rate limit. Stored only in this browser.</span>
+  <div class="api-key-row">
+    <label for="oa-api-key">OpenAlex API key (optional)</label>
+    <input type="password" id="oa-api-key" placeholder="Leave blank to use the shared anonymous limit" autocomplete="off">
+    <span class="hint">Get one at <a href="https://openalex.org/rest-api" target="_blank" rel="noopener">openalex.org/rest-api</a> for a higher rate limit. Stored only in this browser.</span>
   </div>
   <div id="dropzone">
     <p>Drag &amp; drop a .bib file here, or <label for="file-input" class="file-link">browse</label></p>
@@ -162,25 +162,14 @@
 (function () {
   'use strict';
 
-  // Routed through a self-hosted cors-anywhere instance: the Semantic Scholar
-  // API omits CORS headers on non-2xx responses (see fetchJson's 429 handling),
-  // which the proxy fixes by always attaching them, even on error responses.
-  const CORS_PROXY = 'https://annie-easley.n0g.at/cors-anywhere/';
-  const S2_BASE = CORS_PROXY + 'https://api.semanticscholar.org/graph/v1';
+  // OpenAlex supports CORS natively, so unlike Semantic Scholar this needs no proxy.
+  const OPENALEX_BASE = 'https://api.openalex.org';
   const ZOTERO_BASE = 'https://api.zotero.org';
   const ZOTERO_BATCH_SIZE = 50;
   const MIN_DELAY_MS = 150;
   const MAX_REFS_PER_PAPER = 50;
   const MAX_CITATIONS_PER_PAPER = 50;
   const COLORS = { seed: '#2563eb', reference: '#16a34a', citation: '#ea580c' };
-  const RESOLVE_FIELDS = 'paperId,title,authors,year,citationCount,externalIds,abstract';
-  const DETAIL_FIELDS = [
-    'title', 'authors', 'year', 'citationCount', 'externalIds', 'abstract',
-    'references.paperId', 'references.title', 'references.authors',
-    'references.year', 'references.citationCount', 'references.externalIds', 'references.abstract',
-    'citations.paperId', 'citations.title', 'citations.authors',
-    'citations.year', 'citations.citationCount', 'citations.externalIds', 'citations.abstract'
-  ].join(',');
 
   // ---------- BibTeX parsing ----------
 
@@ -266,7 +255,7 @@
     return title || null;
   }
 
-  // ---------- Semantic Scholar API ----------
+  // ---------- OpenAlex API ----------
 
   let lastRequestTime = 0;
   let dynamicDelay = MIN_DELAY_MS;
@@ -284,10 +273,17 @@
     dynamicDelay = Math.min(dynamicDelay * 2, MAX_DELAY_MS);
   }
 
-  function s2AuthHeaders() {
-    const input = document.getElementById('s2-api-key');
+  function buildQuery(params) {
+    const parts = [];
+    for (const k in params) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        parts.push(k + '=' + encodeURIComponent(params[k]));
+      }
+    }
+    const input = document.getElementById('oa-api-key');
     const key = input ? input.value.trim() : '';
-    return key ? { 'x-api-key': key } : {};
+    if (key) parts.push('api_key=' + encodeURIComponent(key));
+    return parts.length ? '?' + parts.join('&') : '';
   }
 
   async function fetchJson(url, retry) {
@@ -295,18 +291,15 @@
     await rateLimit();
     let res;
     try {
-      res = await fetch(url, { headers: s2AuthHeaders() });
+      res = await fetch(url);
     } catch (e) {
-      // The Semantic Scholar API omits CORS headers on 429/5xx responses, so a
-      // browser fetch() can't see the real status — it just throws. Treat any
-      // thrown fetch error as a possible rate limit and back off before retrying.
       if (retry >= MAX_RETRIES) throw new Error('Request failed repeatedly (likely rate-limited): ' + url);
       backOff();
       await sleep(dynamicDelay);
       return fetchJson(url, retry + 1);
     }
     if (res.status === 429 || res.status >= 500) {
-      if (retry >= MAX_RETRIES) throw new Error('HTTP ' + res.status + ' repeatedly (rate-limited or upstream/proxy error): ' + url);
+      if (retry >= MAX_RETRIES) throw new Error('HTTP ' + res.status + ' repeatedly (rate-limited or upstream error): ' + url);
       backOff();
       await sleep(dynamicDelay);
       return fetchJson(url, retry + 1);
@@ -317,26 +310,76 @@
     return res.json();
   }
 
+  function normalizeOaId(id) {
+    if (!id) return null;
+    const m = String(id).match(/([A-Za-z]\d+)$/);
+    return m ? m[1] : id;
+  }
+
+  function reconstructAbstract(invertedIndex) {
+    if (!invertedIndex) return null;
+    const positions = [];
+    let maxPos = -1;
+    for (const word in invertedIndex) {
+      for (const pos of invertedIndex[word]) {
+        positions[pos] = word;
+        if (pos > maxPos) maxPos = pos;
+      }
+    }
+    const words = [];
+    for (let i = 0; i <= maxPos; i++) words.push(positions[i] || '');
+    return words.join(' ').replace(/\s+/g, ' ').trim() || null;
+  }
+
+  // Adapts an OpenAlex "work" into the {paperId, title, authors, year,
+  // citationCount, externalIds, abstract} shape addOrUpdateNode expects.
+  function oaWorkToPaper(work) {
+    if (!work || !work.id) return null;
+    return {
+      paperId: normalizeOaId(work.id),
+      title: work.title || work.display_name || '',
+      authors: (work.authorships || []).map((a) => ({ name: a.author && a.author.display_name })),
+      year: work.publication_year || null,
+      citationCount: work.cited_by_count || 0,
+      externalIds: work.doi ? { DOI: work.doi.replace(/^https?:\/\/doi\.org\//i, '') } : {},
+      abstract: reconstructAbstract(work.abstract_inverted_index)
+    };
+  }
+
   async function resolvePaper(entry) {
     const doi = extractDoi(entry);
     const title = extractTitle(entry);
     if (doi) {
       try {
-        const data = await fetchJson(S2_BASE + '/paper/DOI:' + encodeURIComponent(doi) + '?fields=' + RESOLVE_FIELDS);
-        if (data && data.paperId) return data;
+        const work = await fetchJson(OPENALEX_BASE + '/works/doi:' + encodeURIComponent(doi) + buildQuery({}));
+        const paper = oaWorkToPaper(work);
+        if (paper) {
+          return { paper, referencedWorkIds: (work.referenced_works || []).map(normalizeOaId).filter(Boolean) };
+        }
       } catch (e) { console.warn(e.message); }
     }
     if (title) {
       try {
-        const data = await fetchJson(S2_BASE + '/paper/search?query=' + encodeURIComponent(title) + '&fields=' + RESOLVE_FIELDS + '&limit=1');
-        if (data && data.data && data.data.length) return data.data[0];
+        const data = await fetchJson(OPENALEX_BASE + '/works' + buildQuery({ search: title, per_page: 1 }));
+        const work = data && data.results && data.results[0];
+        const paper = oaWorkToPaper(work);
+        if (paper) {
+          return { paper, referencedWorkIds: (work.referenced_works || []).map(normalizeOaId).filter(Boolean) };
+        }
       } catch (e) { console.warn(e.message); }
     }
     return null;
   }
 
-  async function fetchPaperDetails(paperId) {
-    return fetchJson(S2_BASE + '/paper/' + paperId + '?fields=' + DETAIL_FIELDS);
+  async function fetchWorksByIds(ids) {
+    if (!ids.length) return [];
+    const data = await fetchJson(OPENALEX_BASE + '/works' + buildQuery({ filter: 'ids.openalex:' + ids.join('|'), per_page: ids.length }));
+    return (data && data.results) || [];
+  }
+
+  async function fetchCitingWorks(workId, limit) {
+    const data = await fetchJson(OPENALEX_BASE + '/works' + buildQuery({ filter: 'cites:' + workId, per_page: limit }));
+    return (data && data.results) || [];
   }
 
   // ---------- Graph building ----------
@@ -366,7 +409,7 @@
     const nodes = new Map();
     const edgeKeys = new Set();
     const edges = [];
-    const seedIds = [];
+    const seeds = [];
     const failed = [];
     const emitUpdate = () => onUpdate(Array.from(nodes.values()), edges.slice());
 
@@ -380,51 +423,58 @@
       } catch (e) {
         console.warn('resolve failed', entry.key, e);
       }
-      if (resolved && resolved.paperId) {
-        const node = addOrUpdateNode(nodes, resolved, 'seed');
-        seedIds.push(node.id);
+      if (resolved && resolved.paper && resolved.paper.paperId) {
+        const node = addOrUpdateNode(nodes, resolved.paper, 'seed');
+        seeds.push({ id: node.id, referencedWorkIds: resolved.referencedWorkIds || [] });
         emitUpdate();
       } else {
         failed.push(label);
       }
     }
 
-    for (let i = 0; i < seedIds.length; i++) {
-      const seedId = seedIds[i];
-      progressCb({ phase: 'expand', current: i + 1, total: seedIds.length, label: nodes.get(seedId).title });
-      let details = null;
+    for (let i = 0; i < seeds.length; i++) {
+      const seed = seeds[i];
+      progressCb({ phase: 'expand', current: i + 1, total: seeds.length, label: nodes.get(seed.id).title });
+
+      const refIds = seed.referencedWorkIds.slice(0, MAX_REFS_PER_PAPER);
+      if (refIds.length) {
+        try {
+          const refWorks = await fetchWorksByIds(refIds);
+          for (const w of refWorks) {
+            const paper = oaWorkToPaper(w);
+            if (!paper) continue;
+            addOrUpdateNode(nodes, paper, 'reference');
+            const key = seed.id + '>' + paper.paperId + '>reference';
+            if (!edgeKeys.has(key)) {
+              edgeKeys.add(key);
+              edges.push({ source: seed.id, target: paper.paperId, kind: 'reference' });
+            }
+          }
+        } catch (e) {
+          console.warn('references failed', seed.id, e);
+        }
+      }
+
       try {
-        details = await fetchPaperDetails(seedId);
+        const citingWorks = await fetchCitingWorks(seed.id, MAX_CITATIONS_PER_PAPER);
+        for (const w of citingWorks) {
+          const paper = oaWorkToPaper(w);
+          if (!paper) continue;
+          addOrUpdateNode(nodes, paper, 'citation');
+          const key = paper.paperId + '>' + seed.id + '>citation';
+          if (!edgeKeys.has(key)) {
+            edgeKeys.add(key);
+            edges.push({ source: paper.paperId, target: seed.id, kind: 'citation' });
+          }
+        }
       } catch (e) {
-        console.warn('details failed', seedId, e);
-        continue;
-      }
-      if (!details) continue;
-
-      const refs = (details.references || []).filter((r) => r && r.paperId).slice(0, MAX_REFS_PER_PAPER);
-      for (const r of refs) {
-        addOrUpdateNode(nodes, r, 'reference');
-        const key = seedId + '>' + r.paperId + '>reference';
-        if (!edgeKeys.has(key)) {
-          edgeKeys.add(key);
-          edges.push({ source: seedId, target: r.paperId, kind: 'reference' });
-        }
-      }
-
-      const cites = (details.citations || []).filter((c) => c && c.paperId).slice(0, MAX_CITATIONS_PER_PAPER);
-      for (const c of cites) {
-        addOrUpdateNode(nodes, c, 'citation');
-        const key = c.paperId + '>' + seedId + '>citation';
-        if (!edgeKeys.has(key)) {
-          edgeKeys.add(key);
-          edges.push({ source: c.paperId, target: seedId, kind: 'citation' });
-        }
+        console.warn('citations failed', seed.id, e);
       }
 
       emitUpdate();
     }
 
-    return { nodes: Array.from(nodes.values()), edges, failed, seedCount: seedIds.length };
+    return { nodes: Array.from(nodes.values()), edges, failed, seedCount: seeds.length };
   }
 
   // ---------- UI helpers ----------
@@ -436,14 +486,14 @@
   const progressBar = document.getElementById('progress-bar');
   const controls = document.getElementById('controls');
   const zoteroSection = document.getElementById('zotero-section');
-  const s2ApiKeyInput = document.getElementById('s2-api-key');
+  const oaApiKeyInput = document.getElementById('oa-api-key');
 
   try {
-    s2ApiKeyInput.value = localStorage.getItem('s2_api_key') || '';
+    oaApiKeyInput.value = localStorage.getItem('oa_api_key') || '';
   } catch (e) { /* localStorage unavailable, skip prefill */ }
-  s2ApiKeyInput.addEventListener('change', () => {
+  oaApiKeyInput.addEventListener('change', () => {
     try {
-      localStorage.setItem('s2_api_key', s2ApiKeyInput.value.trim());
+      localStorage.setItem('oa_api_key', oaApiKeyInput.value.trim());
     } catch (e) { /* localStorage unavailable, skip persistence */ }
   });
 
@@ -570,14 +620,24 @@
   }
 
   function drag(sim) {
+    // Only reheat the simulation once actual movement happens, not on every
+    // mousedown — otherwise a plain click-to-open-tooltip jolts the whole graph.
+    let dragging = false;
     function started(event, d) {
-      if (!event.active) sim.alphaTarget(0.2).restart();
+      dragging = false;
       d.fx = d.x; d.fy = d.y;
     }
-    function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+    function dragged(event, d) {
+      if (!dragging) {
+        dragging = true;
+        if (!event.active) sim.alphaTarget(0.2).restart();
+      }
+      d.fx = event.x; d.fy = event.y;
+    }
     function ended(event, d) {
-      if (!event.active) sim.alphaTarget(0);
+      if (dragging && !event.active) sim.alphaTarget(0);
       d.fx = null; d.fy = null;
+      dragging = false;
     }
     return d3.drag().on('start', started).on('drag', dragged).on('end', ended);
   }
@@ -659,7 +719,7 @@
       '<h3>' + escapeHtml(d.title) + '</h3>' +
       '<p>' + escapeHtml(d.authors || 'Unknown authors') + '</p>' +
       '<p>' + (d.year || 'Year unknown') + ' &middot; ' + d.citationCount + ' citations</p>' +
-      '<p><a href="https://www.semanticscholar.org/paper/' + encodeURIComponent(d.id) + '" target="_blank" rel="noopener">View on Semantic Scholar &rarr;</a></p>' +
+      '<p><a href="https://openalex.org/' + encodeURIComponent(d.id) + '" target="_blank" rel="noopener">View on OpenAlex &rarr;</a></p>' +
       '<label class="tooltip-select"><input type="checkbox" id="tooltip-select-cb"' + (selectedIds.has(d.id) ? ' checked' : '') + '> Include in Zotero send</label>';
     tooltip.classList.remove('hidden');
     const rect = document.getElementById('graph-section').getBoundingClientRect();
@@ -720,7 +780,7 @@
     if (n.authors) lines.push('  author = {' + n.authors.split(', ').join(' and ') + '},');
     if (n.year) lines.push('  year = {' + n.year + '},');
     if (n.doi) lines.push('  doi = {' + n.doi + '},');
-    lines.push('  url = {https://www.semanticscholar.org/paper/' + n.id + '},');
+    lines.push('  url = {https://openalex.org/' + n.id + '},');
     lines.push('  note = {' + n.type + ', ' + n.citationCount + ' citations}');
     lines.push('}');
     return lines.join('\n');
@@ -787,7 +847,7 @@
       title: n.title || '',
       creators,
       date: n.year ? String(n.year) : '',
-      url: 'https://www.semanticscholar.org/paper/' + n.id,
+      url: 'https://openalex.org/' + n.id,
       tags: [{ tag: 'citation-graph-explorer' }]
     };
     if (n.doi) item.DOI = n.doi;

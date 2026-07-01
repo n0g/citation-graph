@@ -108,6 +108,12 @@
   .paper-item .paper-meta { color: var(--text-muted); font-size: 0.74rem; margin-top: 0.15rem; }
   .paper-item.failed { background: #fffbeb; color: #b45309; }
   .paper-item .paper-icon { flex: 0 0 auto; margin-top: 0.15rem; color: #f59e0b; }
+  .paper-remove {
+    flex: 0 0 auto; border: none; background: none; padding: 0.2rem; margin: 0;
+    color: var(--text-muted); opacity: 0.35; cursor: pointer; align-self: flex-start;
+  }
+  .paper-item:hover .paper-remove { opacity: 0.9; }
+  .paper-remove:hover { color: #dc2626; background: none; }
 
   #sidebar-footer { display: flex; gap: 0.5rem; padding: 1rem 1.25rem; border-top: 1px solid var(--border); }
   #sidebar-footer button { flex: 1; justify-content: center; }
@@ -236,11 +242,13 @@
     <div id="canvas-toolbar">
       <label><input type="checkbox" id="toggle-refs" checked> References</label>
       <label><input type="checkbox" id="toggle-cites" checked> Citations</label>
+      <label title="Pulls papers that share references or citers closer together, even if they don't cite each other directly"><input type="checkbox" id="toggle-cluster" checked> Cluster similar</label>
       <div id="legend">
         <span><i class="dot" style="background:#2563eb"></i> Seed</span>
         <span><i class="dot" style="background:#16a34a"></i> Reference</span>
         <span><i class="dot" style="background:#ea580c"></i> Citation</span>
         <span title="Size = citation count. Ring = top 10 most-connected papers not yet in your list — good candidates to expand next"><i class="dot" style="background:transparent;border:2.5px solid #f59e0b"></i> Worth expanding</span>
+        <span title="Shared references or citers between two papers (co-citation / bibliographic coupling)"><svg width="16" height="8" viewBox="0 0 16 8"><line x1="0" y1="4" x2="16" y2="4" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2,3"/></svg> Shared refs/citers</span>
       </div>
     </div>
     <svg id="graph"></svg>
@@ -284,7 +292,8 @@
 
   const ICONS = {
     warning: '<svg class="paper-icon" width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg>',
-    spinner: '<svg class="paper-icon spin" width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z"/></svg>'
+    spinner: '<svg class="paper-icon spin" width="14" height="14" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z"/></svg>',
+    x: '<svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>'
   };
 
   // OpenAlex supports CORS natively, so unlike Semantic Scholar this needs no proxy.
@@ -706,14 +715,47 @@
     }
   }
 
+  // Undoes expandNode(nodeId): drops it from the paper list and strips every
+  // edge touching it. Any node left with zero remaining edges only existed
+  // because of this paper, so it's pruned too; nodes still tied to another
+  // paper in the list are kept.
+  function collapseSeed(nodeId) {
+    if (!currentGraph) return;
+    paperListEntries = paperListEntries.filter((e) => !(e.status === 'ok' && e.nodeId === nodeId));
+    expandedIds.delete(nodeId);
+    expandingIds.delete(nodeId);
+    selectedIds.delete(nodeId);
+
+    currentGraph.edges = currentGraph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+    const remainingIds = new Set(currentGraph.edges.flatMap((e) => [e.source, e.target]));
+    const stillSeedIds = new Set(paperListEntries.filter((e) => e.status === 'ok').map((e) => e.nodeId));
+    currentGraph.nodes = currentGraph.nodes.filter((n) => n.id !== nodeId && (remainingIds.has(n.id) || stillSeedIds.has(n.id)));
+
+    renderPaperList();
+    setStatus(currentGraph.nodes.length + ' total nodes, ' + currentGraph.edges.length + ' edges.');
+    update();
+  }
+
+  function removeListEntry(idx) {
+    const entry = paperListEntries[idx];
+    if (!entry) return;
+    if (entry.status === 'failed') {
+      paperListEntries.splice(idx, 1);
+      renderPaperList();
+      return;
+    }
+    collapseSeed(entry.nodeId);
+  }
+
   function renderPaperList() {
     paperListEl.innerHTML = '';
     let okCount = 0;
-    paperListEntries.forEach((entry) => {
+    paperListEntries.forEach((entry, idx) => {
       const li = document.createElement('li');
+      const removeBtn = '<button class="paper-remove" data-idx="' + idx + '" title="Remove" aria-label="Remove">' + ICONS.x + '</button>';
       if (entry.status === 'failed') {
         li.className = 'paper-item failed';
-        li.innerHTML = ICONS.warning + '<div class="paper-text"><div class="paper-title">' + escapeHtml(entry.label) + '</div><div class="paper-meta">Could not resolve</div></div>';
+        li.innerHTML = ICONS.warning + '<div class="paper-text"><div class="paper-title">' + escapeHtml(entry.label) + '</div><div class="paper-meta">Could not resolve</div></div>' + removeBtn;
       } else {
         const node = currentGraph && currentGraph.nodes.find((n) => n.id === entry.nodeId);
         if (!node) return;
@@ -721,11 +763,17 @@
         li.className = 'paper-item';
         const spinner = expandingIds.has(node.id) ? ICONS.spinner : '';
         const meta = [node.year, node.authors ? node.authors.split(',')[0] : ''].filter(Boolean).join(' · ');
-        li.innerHTML = '<div class="paper-text"><div class="paper-title">' + escapeHtml(node.title) + '</div><div class="paper-meta">' + escapeHtml(meta) + '</div></div>' + spinner;
+        li.innerHTML = '<div class="paper-text"><div class="paper-title">' + escapeHtml(node.title) + '</div><div class="paper-meta">' + escapeHtml(meta) + '</div></div>' + spinner + removeBtn;
       }
       paperListEl.appendChild(li);
     });
     paperCountEl.textContent = okCount;
+    paperListEl.querySelectorAll('.paper-remove').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeListEntry(parseInt(btn.getAttribute('data-idx'), 10));
+      });
+    });
   }
 
   function setStatus(msg, isError) {
@@ -754,11 +802,13 @@
 
   // ---------- D3 rendering ----------
 
-  let svg, zoomLayer, gLink, gHalo, gNode, simulation;
+  let svg, zoomLayer, gSimLink, gLink, gHalo, gNode, simulation;
   const TOP_IMPORTANT_COUNT = 10;
+  const MIN_SHARED_NEIGHBORS = 2;
   let currentGraph = null;
   let showRefs = true;
   let showCites = true;
+  let clusterByShared = true;
   let selectedIds = new Set();
   let nodeCircleEls = new Map();
 
@@ -794,6 +844,7 @@
       .attr('fill', '#cbd5e1');
 
     zoomLayer = svg.append('g').attr('class', 'zoom-layer');
+    gSimLink = zoomLayer.append('g').attr('class', 'sim-links');
     gLink = zoomLayer.append('g').attr('class', 'links');
     gHalo = zoomLayer.append('g').attr('class', 'halos');
     gNode = zoomLayer.append('g').attr('class', 'nodes');
@@ -829,6 +880,44 @@
       degree.set(e.target, (degree.get(e.target) || 0) + 1);
     });
     return degree;
+  }
+
+  function intersectionSize(setA, setB) {
+    if (!setA || !setB || !setA.size || !setB.size) return 0;
+    const small = setA.size <= setB.size ? setA : setB;
+    const large = setA.size <= setB.size ? setB : setA;
+    let count = 0;
+    small.forEach((v) => { if (large.has(v)) count++; });
+    return count;
+  }
+
+  // Co-citation (shared citers) + bibliographic coupling (shared references)
+  // between every pair of visible nodes, computed purely from edges already
+  // in the graph — no extra requests. Used as a secondary clustering force
+  // so topically-related papers drift together even without citing each
+  // other directly.
+  function computeSimilarityLinks(nodes, edges) {
+    const citedBy = new Map(); // node id -> set of ids that cite it
+    const citesOf = new Map(); // node id -> set of ids it cites
+    nodes.forEach((n) => { citedBy.set(n.id, new Set()); citesOf.set(n.id, new Set()); });
+    edges.forEach((e) => {
+      if (citesOf.has(e.source)) citesOf.get(e.source).add(e.target);
+      if (citedBy.has(e.target)) citedBy.get(e.target).add(e.source);
+    });
+
+    const ids = nodes.map((n) => n.id);
+    const links = [];
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i], b = ids[j];
+        const score = intersectionSize(citedBy.get(a), citedBy.get(b)) + intersectionSize(citesOf.get(a), citesOf.get(b));
+        // sourceId/targetId are kept alongside source/target because d3.forceLink
+        // mutates source/target from ids into node object references in place —
+        // these copies stay strings so the render key below stays stable.
+        if (score >= MIN_SHARED_NEIGHBORS) links.push({ source: a, target: b, score, sourceId: a, targetId: b });
+      }
+    }
+    return links;
   }
 
   // Highlights well-connected papers that aren't in the paper list yet —
@@ -878,11 +967,23 @@
     const maxCite = d3.max(nodes, (n) => n.citationCount) || 1;
     const radius = d3.scaleSqrt().domain([0, maxCite]).range([6, 26]);
 
+    const similarityLinks = clusterByShared ? computeSimilarityLinks(nodes, edges) : [];
+
     simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(edges).id((d) => d.id).distance(80).strength(0.3))
+      .force('similarity', d3.forceLink(similarityLinks).id((d) => d.id).distance(40).strength((d) => Math.min(0.06 * d.score, 0.4)))
       .force('charge', d3.forceManyBody().strength(-180))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collide', d3.forceCollide().radius((d) => radius(d.citationCount) + 4));
+
+    const simLink = gSimLink.selectAll('line').data(similarityLinks, (d) => d.sourceId + '~' + d.targetId);
+    simLink.exit().remove();
+    const simLinkEnter = simLink.enter().append('line')
+      .attr('stroke', '#94a3b8')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '2,3')
+      .attr('opacity', 0.55);
+    const simLinkMerged = simLinkEnter.merge(simLink);
 
     const link = gLink.selectAll('line').data(edges, (d, i) => i + '-' + d.kind);
     link.exit().remove();
@@ -922,6 +1023,9 @@
     refreshSelectionVisuals();
 
     simulation.on('tick', () => {
+      simLinkMerged
+        .attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y)
+        .attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
       linkMerged
         .attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y)
         .attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
@@ -968,6 +1072,10 @@
   });
   document.getElementById('toggle-cites').addEventListener('change', (e) => {
     showCites = e.target.checked;
+    update();
+  });
+  document.getElementById('toggle-cluster').addEventListener('change', (e) => {
+    clusterByShared = e.target.checked;
     update();
   });
 

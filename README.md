@@ -24,8 +24,16 @@ server).
    and its own references/citations are fetched and merged into the graph,
    so you can keep growing the network beyond the original bibliography.
    Hover a node for its title/authors/year/citation count and an OpenAlex
-   link, without expanding it.
-5. Use the sidebar footer to export everything discovered as a `.bib` file,
+   link, without expanding it. Click the **×** next to a paper in the
+   sidebar list to undo this — it's removed from the list, and any node
+   that only existed because of it is pruned too (nodes still tied to
+   another paper in your list are kept).
+5. Toggle **"Cluster similar"** to pull together papers that share
+   references or citers even if they don't cite each other directly (shown
+   as faint dashed lines) — this is co-citation and bibliographic coupling,
+   computed for free from the edges already in the graph, no extra requests
+   or topic classification needed.
+6. Use the sidebar footer to export everything discovered as a `.bib` file,
    or open the Zotero panel to pick papers and send them straight to a
    Zotero library.
 

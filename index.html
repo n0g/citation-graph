@@ -361,12 +361,13 @@
     return node;
   }
 
-  async function buildGraph(entries, progressCb) {
+  async function buildGraph(entries, progressCb, onUpdate) {
     const nodes = new Map();
     const edgeKeys = new Set();
     const edges = [];
     const seedIds = [];
     const failed = [];
+    const emitUpdate = () => onUpdate(Array.from(nodes.values()), edges.slice());
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
@@ -381,6 +382,7 @@
       if (resolved && resolved.paperId) {
         const node = addOrUpdateNode(nodes, resolved, 'seed');
         seedIds.push(node.id);
+        emitUpdate();
       } else {
         failed.push(label);
       }
@@ -417,6 +419,8 @@
           edges.push({ source: c.paperId, target: seedId, kind: 'citation' });
         }
       }
+
+      emitUpdate();
     }
 
     return { nodes: Array.from(nodes.values()), edges, failed, seedCount: seedIds.length };
@@ -828,9 +832,17 @@
     }
 
     setProgressVisible(true);
+    currentGraph = { nodes: [], edges: [] };
+    showControls(true);
+    const onUpdate = (nodes, edges) => {
+      currentGraph.nodes = nodes;
+      currentGraph.edges = edges;
+      update();
+    };
+
     let result;
     try {
-      result = await buildGraph(entries, updateProgress);
+      result = await buildGraph(entries, updateProgress, onUpdate);
     } catch (e) {
       setProgressVisible(false);
       setStatus('Error building graph: ' + e.message, true);
@@ -846,7 +858,6 @@
         (result.failed.length > 5 ? ' (+' + (result.failed.length - 5) + ' more)' : '');
     }
     setStatus(summary);
-    showControls(true);
     update();
   }
 
